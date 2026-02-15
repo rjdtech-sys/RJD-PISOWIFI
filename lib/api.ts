@@ -1,5 +1,5 @@
 
-import { Rate, NetworkInterface, SystemConfig, WanConfig, VlanConfig, WifiDevice, DeviceSession, PPPoEServerConfig, PPPoEUser, PPPoESession, QoSConfig, PPPoEProfile, PPPoEBillingProfile } from '../types';
+import { Rate, NetworkInterface, SystemConfig, WanConfig, VlanConfig, WifiDevice, DeviceSession, PPPoEServerConfig, PPPoEUser, PPPoESession, QoSConfig, PPPoEProfile, PPPoEBillingProfile, PPPoEPool } from '../types';
 
 const API_BASE = '/api';
 
@@ -550,6 +550,38 @@ export const apiClient = {
       headers: getHeaders()
     });
     await handleResponse(res);
+  },
+
+  // PPPoE IP Pool APIs
+  async getPPPoEPools(): Promise<PPPoEPool[]> {
+    const res = await fetch(`${API_BASE}/network/pppoe/pools`, { headers: getHeaders() });
+    return handleResponse(res);
+  },
+
+  async addPPPoEPool(pool: Partial<PPPoEPool>): Promise<{ success: boolean; id?: number }> {
+    const res = await fetch(`${API_BASE}/network/pppoe/pools`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(pool)
+    });
+    return handleResponse(res);
+  },
+
+  async updatePPPoEPool(id: number, updates: Partial<PPPoEPool>): Promise<{ success: boolean }> {
+    const res = await fetch(`${API_BASE}/network/pppoe/pools/${id}`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify(updates)
+    });
+    return handleResponse(res);
+  },
+
+  async deletePPPoEPool(id: number): Promise<{ success: boolean }> {
+    const res = await fetch(`${API_BASE}/network/pppoe/pools/${id}`, {
+      method: 'DELETE',
+      headers: getHeaders()
+    });
+    return handleResponse(res);
   },
 
   // PPPoE Logs API

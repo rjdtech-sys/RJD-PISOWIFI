@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { apiClient } from '../../lib/api';
-import { NetworkInterface, PPPoEServerConfig, PPPoEUser, PPPoESession, PPPoEProfile, PPPoEBillingProfile } from '../../types';
+import { NetworkInterface, PPPoEServerConfig, PPPoEUser, PPPoESession, PPPoEProfile, PPPoEBillingProfile, PPPoEPool } from '../../types';
 
 const PPPoEServer: React.FC = () => {
   const [interfaces, setInterfaces] = useState<NetworkInterface[]>([]);
@@ -26,6 +26,9 @@ const PPPoEServer: React.FC = () => {
   const [newPppoeUser, setNewPppoeUser] = useState({ username: '', password: '', billing_profile_id: '' });
   const [newProfile, setNewProfile] = useState<PPPoEProfile>({ name: '', rate_limit_dl: 5, rate_limit_ul: 5 });
   const [newBillingProfile, setNewBillingProfile] = useState<Partial<PPPoEBillingProfile>>({ profile_id: 0, name: '', price: 0 });
+  const [pppoePools, setPppoePools] = useState<PPPoEPool[]>([]);
+  const [newPool, setNewPool] = useState<Partial<PPPoEPool>>({ name: '', ip_pool_start: '', ip_pool_end: '', description: '' });
+  const [editingPoolId, setEditingPoolId] = useState<number | null>(null);
 
   useEffect(() => { 
     loadData();
@@ -36,13 +39,14 @@ const PPPoEServer: React.FC = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [ifaces, pppoeS, pppoeU, pppoeSess, profiles, billingProfiles] = await Promise.all([
+      const [ifaces, pppoeS, pppoeU, pppoeSess, profiles, billingProfiles, pools] = await Promise.all([
         apiClient.getInterfaces(),
         apiClient.getPPPoEServerStatus().catch(() => null),
         apiClient.getPPPoEUsers().catch(() => []),
         apiClient.getPPPoESessions().catch(() => []),
         apiClient.getPPPoEProfiles().catch(() => []),
-        apiClient.getPPPoEBillingProfiles().catch(() => [])
+        apiClient.getPPPoEBillingProfiles().catch(() => []),
+        apiClient.getPPPoEPools().catch(() => [])
       ]);
       const detectedIfaces = ifaces.filter(i => !i.isLoopback);
       setInterfaces(detectedIfaces);
@@ -60,6 +64,7 @@ const PPPoEServer: React.FC = () => {
       setPppoeSessions(Array.isArray(pppoeSess) ? pppoeSess : []);
       setPppoeProfiles(profiles);
       setPppoeBillingProfiles(billingProfiles);
+      setPppoePools(Array.isArray(pools) ? pools : []);
       loadLogs();
     } catch (err) { 
       console.error('[UI] Data Load Error:', err); 
@@ -205,6 +210,69 @@ const PPPoEServer: React.FC = () => {
       await loadData();
     } catch (e: any) {
       alert(`Failed to delete billing profile: ${e.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetPoolForm = () => {
+    setNewPool({ name: '', ip_pool_start: '', ip_pool_end: '', description: '' });
+    setEditingPoolId(null);
+  };
+
+  const savePoolHandler = async () => {
+    if (!newPool.name || !newPool.ip_pool_start || !newPool.ip_pool_end) {
+      return alert('Name, Pool Start, and Pool End are required!');
+    }
+    try {
+      setLoading(true);
+      if (editingPoolId == null) {
+        await apiClient.addPPPoEPool({
+          name: newPool.name,
+          ip_pool_start: newPool.ip_pool_start,
+          ip_pool_end: newPool.ip_pool_end,
+          description: newPool.description
+        });
+      } else {
+        await apiClient.updatePPPoEPool(editingPoolId, {
+          name: newPool.name,
+          ip_pool_start: newPool.ip_pool_start,
+          ip_pool_end: newPool.ip_pool_end,
+          description: newPool.description
+        });
+      }
+      resetPoolForm();
+      await loadData();
+    } catch (e: any) {
+      alert(`Failed to save PPPoE pool: ${e.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const editPoolHandler = (pool: PPPoEPool) => {
+    if (!pool.id) return;
+    setEditingPoolId(pool.id);
+    setNewPool({
+      name: pool.name,
+      ip_pool_start: pool.ip_pool_start,
+      ip_pool_end: pool.ip_pool_end,
+      description: pool.description || ''
+    });
+  };
+
+  const deletePoolHandler = async (pool: PPPoEPool) => {
+    if (!pool.id) return;
+    if (!confirm(`Delete PPPoE pool "${pool.name}"?`)) return;
+    try {
+      setLoading(true);
+      await apiClient.deletePPPoEPool(pool.id);
+      if (editingPoolId === pool.id) {
+        resetPoolForm();
+      }
+      await loadData();
+    } catch (e: any) {
+      alert(`Failed to delete PPPoE pool: ${e.message}`);
     } finally {
       setLoading(false);
     }
@@ -356,6 +424,119 @@ const PPPoEServer: React.FC = () => {
                     )}
                   </div>
                 </div>
+              </div>
+            </div>
+
+            <div className="bg-white border border-slate-200 rounded-lg overflow-hidden flex flex-col">
+              <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+                <h4 className="text-[9px] font-black text-slate-900 uppercase tracking-widest">PPPoE IP Pools</h4>
+                <span className="text-[8px] font-bold text-slate-400 bg-white px-1.5 py-0.5 rounded border border-slate-200">{pppoePools.length}</span>
+              </div>
+              <div className="p-3 border-b border-slate-100 bg-slate-50/30">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
+                  <div>
+                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Pool Name</label>
+                    <input
+                      type="text"
+                      value={newPool.name || ''}
+                      onChange={e => setNewPool({ ...newPool, name: e.target.value })}
+                      className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-[10px] font-bold outline-none"
+                      placeholder="Example: Default Pool"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Description</label>
+                    <input
+                      type="text"
+                      value={newPool.description || ''}
+                      onChange={e => setNewPool({ ...newPool, description: e.target.value })}
+                      className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-[10px] font-mono outline-none"
+                      placeholder="Optional"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Pool Start</label>
+                    <input
+                      type="text"
+                      value={newPool.ip_pool_start || ''}
+                      onChange={e => setNewPool({ ...newPool, ip_pool_start: e.target.value })}
+                      className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-[10px] font-mono outline-none"
+                      placeholder="192.168.100.10"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Pool End</label>
+                    <input
+                      type="text"
+                      value={newPool.ip_pool_end || ''}
+                      onChange={e => setNewPool({ ...newPool, ip_pool_end: e.target.value })}
+                      className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-[10px] font-mono outline-none"
+                      placeholder="192.168.100.254"
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={savePoolHandler}
+                    disabled={loading}
+                    className="flex-1 bg-slate-900 text-white py-1.5 rounded text-[9px] font-black uppercase tracking-widest hover:bg-black transition-all disabled:opacity-50"
+                  >
+                    {editingPoolId == null ? 'Add Pool' : 'Update Pool'}
+                  </button>
+                  {editingPoolId != null && (
+                    <button
+                      onClick={resetPoolForm}
+                      type="button"
+                      disabled={loading}
+                      className="px-3 py-1.5 rounded text-[9px] font-black uppercase tracking-widest border border-slate-300 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="max-h-[180px] overflow-y-auto divide-y divide-slate-100">
+                {pppoePools.length > 0 ? (
+                  pppoePools.map(pool => (
+                    <div key={pool.id} className="px-3 py-2 flex items-center justify-between group">
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-900">{pool.name}</p>
+                        <p className="text-[8px] text-slate-500 font-mono">
+                          {pool.ip_pool_start} - {pool.ip_pool_end}
+                        </p>
+                        {pool.description ? (
+                          <p className="text-[7px] text-slate-400 font-bold uppercase tracking-widest">
+                            {pool.description}
+                          </p>
+                        ) : null}
+                      </div>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                        <button
+                          onClick={() => editPoolHandler(pool)}
+                          className="text-slate-500 hover:text-slate-800 p-1"
+                          title="Edit Pool"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15.232 5.232l3.536 3.536M4 20h4.75L19 9.75 14.25 5 4 15.75V20z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => deletePoolHandler(pool)}
+                          className="text-red-500 hover:text-red-700 p-1"
+                          title="Delete Pool"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="py-6 text-center">
+                    <p className="text-[9px] text-slate-400 uppercase font-black tracking-widest">No PPPoE pools defined</p>
+                  </div>
+                )}
               </div>
             </div>
 

@@ -143,6 +143,15 @@ export interface PPPoESession {
   tx_bytes: number;
 }
 
+export interface PPPoEPool {
+  id?: number;
+  name: string;
+  ip_pool_start: string;
+  ip_pool_end: string;
+  description?: string | null;
+  created_at?: string;
+}
+
 export interface UserSession {
   mac: string;
   ip: string;
