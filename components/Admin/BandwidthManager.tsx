@@ -215,7 +215,7 @@ const BandwidthManager: React.FC<Props> = ({ devices, rates }) => {
           <button 
             onClick={applyToAllDevices}
             disabled={loading}
-            className="bg-slate-800 text-white py-2 px-4 rounded-lg font-black text-[10px] uppercase tracking-widest hover:bg-slate-900 transition-all shadow-md shadow-slate-800/10 disabled:opacity-50"
+            className="admin-btn-primary py-2 px-4 rounded-lg font-black text-[10px] uppercase tracking-widest shadow-md shadow-slate-800/10 disabled:opacity-50"
           >
             {loading ? 'APPLYING...' : 'APPLY TO ALL'}
           </button>

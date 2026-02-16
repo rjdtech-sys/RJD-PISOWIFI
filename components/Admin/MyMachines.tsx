@@ -76,7 +76,12 @@ export const MyMachines: React.FC = () => {
         <div className="text-center bg-white p-6 rounded-xl border border-red-100 shadow-sm max-w-sm">
           <div className="text-2xl mb-2">⚠️</div>
           <p className="text-[10px] font-black text-red-600 uppercase tracking-widest mb-4">{error}</p>
-          <button onClick={fetchStatus} className="w-full py-2 bg-slate-900 text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all">Retry Link</button>
+          <button
+            onClick={fetchStatus}
+            className="admin-btn-primary w-full py-2 rounded-lg text-[10px] font-black uppercase tracking-widest"
+          >
+            Retry Link
+          </button>
         </div>
       </div>
     );

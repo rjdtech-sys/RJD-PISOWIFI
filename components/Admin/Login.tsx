@@ -41,8 +41,8 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onBack }) => {
     <div className="min-h-screen bg-[#0f172a] flex items-center justify-center p-4">
       <div className="max-w-sm w-full bg-white p-6 rounded-2xl shadow-2xl border border-slate-200">
         <div className="text-center mb-6">
-          <div className="w-12 h-12 bg-slate-900 rounded-xl flex items-center justify-center mx-auto mb-4 shadow-lg">
-             <span className="text-white text-xl">🔒</span>
+          <div className="w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-4 shadow-lg admin-btn-primary">
+             <span className="text-xl">🔒</span>
           </div>
           <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Admin Control</h2>
           <p className="text-slate-400 text-[9px] font-bold uppercase tracking-tighter mt-1">Authorized Access Only</p>
@@ -79,7 +79,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onBack }) => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-slate-900 text-white py-3 rounded-lg font-black text-[10px] uppercase tracking-[0.2em] hover:bg-black transition-all shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed mt-4"
+            className="admin-btn-primary w-full py-3 rounded-lg font-black text-[10px] uppercase tracking-[0.2em] shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed mt-4"
           >
             {loading ? 'Verifying...' : 'Login to Console'}
           </button>

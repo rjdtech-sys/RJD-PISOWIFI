@@ -274,7 +274,12 @@ const App: React.FC = () => {
           <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6 text-3xl">⚠️</div>
           <h2 className="text-xl font-black text-slate-900 mb-2 uppercase tracking-tight">System Offline</h2>
           <p className="text-slate-500 text-sm mb-8 leading-relaxed">{error}</p>
-          <button onClick={() => { setLoading(true); loadData(); }} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold hover:bg-black shadow-xl shadow-slate-900/20">Retry System Link</button>
+          <button
+            onClick={() => { setLoading(true); loadData(); }}
+            className="admin-btn-primary w-full py-4 rounded-2xl font-bold shadow-xl shadow-slate-900/20"
+          >
+            Retry System Link
+          </button>
         </div>
       </div>
     );
@@ -283,7 +288,10 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="fixed bottom-4 right-4 z-[999] hidden md:block">
-        <button onClick={handleToggleAdmin} className="bg-slate-950 text-white px-5 py-3 rounded-full text-[10px] font-black tracking-widest uppercase hover:bg-blue-600 shadow-2xl border border-white/10 active:scale-95 transition-all flex items-center gap-2">
+        <button
+          onClick={handleToggleAdmin}
+          className="admin-exit-btn px-5 py-3 rounded-full text-[10px] font-black tracking-widest uppercase shadow-2xl border active:scale-95 transition-all flex items-center gap-2"
+        >
           <span>{isAdmin ? '🚪' : '🔐'}</span>
           {isAdmin ? 'Exit Admin' : 'Admin Login'}
         </button>
@@ -352,15 +360,15 @@ const App: React.FC = () => {
                       {sidebarOpen && <span className="text-slate-500 text-[9px] font-bold uppercase tracking-wider">v3.4.0-beta.1 ONLINE</span>}
                    </div>
                    
-                   {/* Mobile Exit Button */}
-                   {sidebarOpen && (
-                     <button 
-                       onClick={handleToggleAdmin}
-                       className="w-full bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 px-3 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest flex items-center justify-center gap-2 transition-colors md:hidden"
-                     >
-                       <span>🚪</span> Exit Admin
-                     </button>
-                   )}
+                  {/* Mobile Exit Button */}
+                  {sidebarOpen && (
+                    <button 
+                      onClick={handleToggleAdmin}
+                      className="admin-exit-btn w-full px-3 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest flex items-center justify-center gap-2 transition-colors md:hidden"
+                    >
+                      <span>🚪</span> Exit Admin
+                    </button>
+                  )}
                  </div>
               </div>
             </aside>

@@ -149,7 +149,7 @@ const HardwareManager: React.FC = () => {
                <button
                  onClick={handleSave}
                  disabled={saving}
-                 className="sm:w-48 py-3 rounded-lg bg-slate-900 text-white font-black text-[10px] uppercase tracking-[0.2em] hover:bg-black transition-all shadow-lg active:scale-95 disabled:opacity-50 flex justify-center items-center gap-2"
+                 className="admin-btn-primary sm:w-48 py-3 rounded-lg font-black text-[10px] uppercase tracking-[0.2em] transition-all shadow-lg active:scale-95 disabled:opacity-50 flex justify-center items-center gap-2"
                >
                  <Save size={12} />
                  {saving ? 'Saving...' : 'Apply Config'}

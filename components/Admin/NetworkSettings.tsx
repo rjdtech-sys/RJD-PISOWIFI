@@ -302,7 +302,13 @@ const NetworkSettings: React.FC = () => {
               <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Passkey</label>
               <input type="password" value={newWifi.password} onChange={e => setNewWifi({...newWifi, password: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs" placeholder="Open" />
             </div>
-            <button onClick={() => deployWireless()} disabled={loading} className="w-full bg-slate-900 text-white py-2 rounded-lg font-black text-[9px] uppercase tracking-widest shadow-md hover:bg-black transition-all disabled:opacity-50">Start Radio</button>
+            <button
+              onClick={() => deployWireless()}
+              disabled={loading}
+              className="admin-btn-primary w-full py-2 rounded-lg font-black text-[9px] uppercase tracking-widest shadow-md disabled:opacity-50"
+            >
+              Start Radio
+            </button>
           </div>
         </div>
 
@@ -373,7 +379,13 @@ const NetworkSettings: React.FC = () => {
                 <input type="text" value={newHS.dhcp_gateway || ''} onChange={e => setNewHS({...newHS, dhcp_gateway: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono" />
               </div>
             </div>
-            <button onClick={createHotspot} disabled={loading} className="w-full bg-slate-900 text-white py-2 rounded-lg font-black text-[9px] uppercase tracking-widest shadow-md hover:bg-black transition-all disabled:opacity-50">Commit Portal</button>
+            <button
+              onClick={createHotspot}
+              disabled={loading}
+              className="admin-btn-primary w-full py-2 rounded-lg font-black text-[9px] uppercase tracking-widest shadow-md disabled:opacity-50"
+            >
+              Commit Portal
+            </button>
           </div>
         </div>
 
@@ -438,7 +450,13 @@ const NetworkSettings: React.FC = () => {
                 </select>
               </div>
               <div className="flex gap-2">
-                <button onClick={saveHotspotEdit} disabled={loading} className="bg-slate-900 text-white px-3 py-2 rounded-lg font-black text-[9px] uppercase tracking-widest">Save Changes</button>
+                <button
+                  onClick={saveHotspotEdit}
+                  disabled={loading}
+                  className="admin-btn-primary px-3 py-2 rounded-lg font-black text-[9px] uppercase tracking-widest"
+                >
+                  Save Changes
+                </button>
                 <button onClick={cancelEdit} className="border border-slate-300 text-slate-600 px-3 py-2 rounded-lg font-black text-[9px] uppercase tracking-widest">Cancel</button>
               </div>
             </div>
@@ -467,7 +485,13 @@ const NetworkSettings: React.FC = () => {
                 <input type="number" value={vlan.id} onChange={e => setVlan({...vlan, id: parseInt(e.target.value), name: makeSafeVlanName(vlan.parentInterface, parseInt(e.target.value))})} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono" />
               </div>
             </div>
-            <button onClick={generateVlan} disabled={loading} className="w-full bg-slate-900 text-white py-2 rounded-lg font-black text-[9px] uppercase tracking-widest">Create: {vlan.name}</button>
+            <button
+              onClick={generateVlan}
+              disabled={loading}
+              className="admin-btn-primary w-full py-2 rounded-lg font-black text-[9px] uppercase tracking-widest"
+            >
+              Create: {vlan.name}
+            </button>
             
             <div className="space-y-1.5">
               {vlans.map(v => (
@@ -497,7 +521,13 @@ const NetworkSettings: React.FC = () => {
                  </button>
                ))}
             </div>
-            <button onClick={deployBridge} disabled={loading} className="w-full border border-slate-900 text-slate-900 py-2 rounded-lg font-black text-[9px] uppercase tracking-widest hover:bg-slate-900 hover:text-white transition-all">Deploy Bridge</button>
+            <button
+              onClick={deployBridge}
+              disabled={loading}
+              className="admin-btn-outline-primary w-full py-2 rounded-lg font-black text-[9px] uppercase tracking-widest transition-all disabled:opacity-50"
+            >
+              Deploy Bridge
+            </button>
             
             <div className="space-y-1.5">
               {bridges.map(b => (

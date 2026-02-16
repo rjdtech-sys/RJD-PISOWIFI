@@ -290,7 +290,7 @@ const PortalEditor: React.FC = () => {
           <div className="mt-6 flex gap-3">
             <button 
               onClick={handleSave}
-              className="flex-1 bg-slate-900 text-white py-3 rounded-lg font-black text-[10px] uppercase tracking-[0.2em] shadow-lg hover:bg-black transition-all active:scale-95"
+              className="admin-btn-primary flex-1 py-3 rounded-lg font-black text-[10px] uppercase tracking-[0.2em] shadow-lg active:scale-95 disabled:opacity-50"
             >
               Apply Design
             </button>

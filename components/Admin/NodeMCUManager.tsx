@@ -308,7 +308,7 @@ const NodeMCUManager: React.FC<NodeMCUManagerProps> = ({ devices, onUpdateDevice
                 <button
                   onClick={handleSaveAuthKey}
                   disabled={isSavingAuthKey}
-                  className="p-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-50"
+                  className="admin-btn-primary p-2 rounded-lg text-[9px] font-black uppercase tracking-widest disabled:opacity-50"
                   title="Save"
                 >
                   {isSavingAuthKey ? (
@@ -375,7 +375,7 @@ const NodeMCUManager: React.FC<NodeMCUManagerProps> = ({ devices, onUpdateDevice
             onClick={() => setActiveTab('devices')}
             className={`flex-1 px-4 py-3 text-[10px] font-black uppercase tracking-widest transition-all ${
               activeTab === 'devices'
-                ? 'bg-slate-900 text-white border-b-2 border-slate-900'
+                ? 'admin-tab-active'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
             }`}
           >
@@ -385,7 +385,7 @@ const NodeMCUManager: React.FC<NodeMCUManagerProps> = ({ devices, onUpdateDevice
             onClick={() => setActiveTab('licenses')}
             className={`flex-1 px-4 py-3 text-[10px] font-black uppercase tracking-widest transition-all ${
               activeTab === 'licenses'
-                ? 'bg-slate-900 text-white border-b-2 border-slate-900'
+                ? 'admin-tab-active'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
             }`}
           >
@@ -530,7 +530,7 @@ const NodeMCUManager: React.FC<NodeMCUManagerProps> = ({ devices, onUpdateDevice
                               relayPinLabel: relayLabel
                             });
                           }}
-                          className="px-2 py-1 bg-slate-900 text-white text-[8px] font-black uppercase tracking-widest rounded hover:bg-black transition-all"
+                          className="admin-btn-primary px-2 py-1 rounded text-[8px] font-black uppercase tracking-widest"
                         >
                           Config
                         </button>
@@ -679,7 +679,7 @@ const NodeMCUManager: React.FC<NodeMCUManagerProps> = ({ devices, onUpdateDevice
                     handleSaveDeviceConfig(selectedDevice);
                     setSelectedDevice(null);
                   }}
-                  className="flex-1 py-2.5 bg-slate-900 text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-lg active:scale-95"
+                  className="admin-btn-primary flex-1 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-lg active:scale-95"
                 >
                   Save Configuration
                 </button>

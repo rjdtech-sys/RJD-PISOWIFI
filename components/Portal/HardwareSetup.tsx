@@ -226,7 +226,7 @@ const HardwareSetup: React.FC<Props> = ({ onClose, onSaved }) => {
           <button
             onClick={handleSave}
             disabled={saving}
-            className="w-full py-5 rounded-2xl bg-slate-900 text-white font-black text-lg tracking-tight hover:bg-black transition-all shadow-xl shadow-slate-900/10 active:scale-95 disabled:opacity-50"
+            className="admin-btn-primary w-full py-5 rounded-2xl font-black text-lg tracking-tight shadow-xl shadow-slate-900/10 active:scale-95 disabled:opacity-50"
           >
             {saving ? 'UPDATING KERNEL MODULES...' : 'COMMIT HARDWARE CHANGES'}
           </button>

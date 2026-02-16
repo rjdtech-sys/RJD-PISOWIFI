@@ -498,7 +498,7 @@ const PPPoEServer: React.FC = () => {
                       <button 
                         onClick={startPPPoEServerHandler} 
                         disabled={loading} 
-                        className="w-full bg-slate-900 text-white py-2.5 rounded-md font-black text-[9px] uppercase tracking-[0.2em] shadow-lg hover:bg-black transition-all active:scale-95 disabled:opacity-50"
+                        className="admin-btn-primary w-full py-2.5 rounded-md font-black text-[9px] uppercase tracking-[0.2em] shadow-lg active:scale-95 disabled:opacity-50"
                       >
                         Launch PPPoE Server
                       </button>
@@ -661,7 +661,7 @@ const PPPoEServer: React.FC = () => {
                   </div>
                   <button 
                     onClick={addProfileHandler}
-                    className="w-full bg-slate-900 text-white py-1.5 rounded text-[9px] font-black uppercase tracking-widest hover:bg-black transition-all"
+                    className="admin-btn-primary w-full py-1.5 rounded text-[9px] font-black uppercase tracking-widest"
                   >
                     Add Profile
                   </button>
