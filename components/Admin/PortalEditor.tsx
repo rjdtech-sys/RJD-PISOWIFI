@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { PortalConfig, fetchPortalConfig, savePortalConfigRemote, DEFAULT_PORTAL_CONFIG } from '../../lib/theme';
+import { apiClient } from '../../lib/api';
 
 const PortalEditor: React.FC = () => {
   const [config, setConfig] = useState<PortalConfig>(DEFAULT_PORTAL_CONFIG);
@@ -12,6 +13,10 @@ const PortalEditor: React.FC = () => {
     macSyncEnabled: DEFAULT_PORTAL_CONFIG.macSyncEnabled,
     macSyncMode: DEFAULT_PORTAL_CONFIG.macSyncMode
   });
+  const [centralPortal, setCentralPortal] = useState<{ enabled: boolean; ip: string }>({
+    enabled: false,
+    ip: ''
+  });
 
   useEffect(() => {
     fetchPortalConfig().then((cfg) => {
@@ -21,6 +26,12 @@ const PortalEditor: React.FC = () => {
         macSyncMode: cfg.macSyncMode
       });
     });
+    apiClient.getConfig().then(cfg => {
+      setCentralPortal({
+        enabled: Boolean(cfg.centralPortalIpEnabled),
+        ip: cfg.centralPortalIp || ''
+      });
+    }).catch(() => {});
   }, []);
 
   const [mode, setMode] = useState<'visual' | 'code'>('visual');
@@ -410,6 +421,17 @@ const PortalEditor: React.FC = () => {
             >
               Reset
             </button>
+          </div>
+
+          <div className="mt-4 border-t border-dashed border-slate-200 pt-3">
+            <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">
+              Centralized Portal IP
+            </div>
+            <p className="text-[9px] text-slate-500">
+              {centralPortal.enabled
+                ? (centralPortal.ip || 'Enabled pero walang nakaset na IP/hostname')
+                : 'Disabled'}
+            </p>
           </div>
         </section>
       </div>
