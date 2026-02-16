@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { apiClient } from '../../lib/api';
-import { NetworkInterface, PPPoEServerConfig, PPPoEUser, PPPoESession, PPPoEProfile, PPPoEBillingProfile } from '../../types';
+import { NetworkInterface, PPPoEServerConfig, PPPoEUser, PPPoESession, PPPoEProfile, PPPoEBillingProfile, PPPoEPool } from '../../types';
 
 const PPPoEServer: React.FC = () => {
   const [interfaces, setInterfaces] = useState<NetworkInterface[]>([]);
@@ -26,6 +26,12 @@ const PPPoEServer: React.FC = () => {
   const [newPppoeUser, setNewPppoeUser] = useState({ username: '', password: '', billing_profile_id: '' });
   const [newProfile, setNewProfile] = useState<PPPoEProfile>({ name: '', rate_limit_dl: 5, rate_limit_ul: 5 });
   const [newBillingProfile, setNewBillingProfile] = useState<Partial<PPPoEBillingProfile>>({ profile_id: 0, name: '', price: 0 });
+  const [pppoePools, setPppoePools] = useState<PPPoEPool[]>([]);
+  const [newPool, setNewPool] = useState<Partial<PPPoEPool>>({ name: '', ip_pool_start: '', ip_pool_end: '', description: '' });
+  const [editingPoolId, setEditingPoolId] = useState<number | null>(null);
+  const [selectedPoolId, setSelectedPoolId] = useState<number | null>(null);
+  const [lastCreatedAccountNumber, setLastCreatedAccountNumber] = useState<string | null>(null);
+  const [editingUser, setEditingUser] = useState<PPPoEUser | null>(null);
 
   useEffect(() => { 
     loadData();
@@ -36,13 +42,14 @@ const PPPoEServer: React.FC = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [ifaces, pppoeS, pppoeU, pppoeSess, profiles, billingProfiles] = await Promise.all([
+      const [ifaces, pppoeS, pppoeU, pppoeSess, profiles, billingProfiles, pools] = await Promise.all([
         apiClient.getInterfaces(),
         apiClient.getPPPoEServerStatus().catch(() => null),
         apiClient.getPPPoEUsers().catch(() => []),
         apiClient.getPPPoESessions().catch(() => []),
         apiClient.getPPPoEProfiles().catch(() => []),
-        apiClient.getPPPoEBillingProfiles().catch(() => [])
+        apiClient.getPPPoEBillingProfiles().catch(() => []),
+        apiClient.getPPPoEPools().catch(() => [])
       ]);
       const detectedIfaces = ifaces.filter(i => !i.isLoopback);
       setInterfaces(detectedIfaces);
@@ -60,6 +67,7 @@ const PPPoEServer: React.FC = () => {
       setPppoeSessions(Array.isArray(pppoeSess) ? pppoeSess : []);
       setPppoeProfiles(profiles);
       setPppoeBillingProfiles(billingProfiles);
+      setPppoePools(Array.isArray(pools) ? pools : []);
       loadLogs();
     } catch (err) { 
       console.error('[UI] Data Load Error:', err); 
@@ -127,14 +135,19 @@ const PPPoEServer: React.FC = () => {
     
     try {
       setLoading(true);
-      await apiClient.addPPPoEUser(
+      const result = await apiClient.addPPPoEUser(
         newPppoeUser.username, 
         newPppoeUser.password, 
         newPppoeUser.billing_profile_id ? parseInt(newPppoeUser.billing_profile_id) : undefined
       );
+      if (result?.account_number) {
+        setLastCreatedAccountNumber(result.account_number);
+      } else {
+        setLastCreatedAccountNumber(null);
+      }
       setNewPppoeUser({ username: '', password: '', billing_profile_id: '' });
       await loadData();
-      alert(`User ${newPppoeUser.username} added!`);
+      alert(`User ${newPppoeUser.username} added!${result?.account_number ? ` Account No: ${result.account_number}` : ''}`);
     } catch (e: any) {
       alert(`Failed to add user: ${e.message}`);
     } finally {
@@ -154,6 +167,46 @@ const PPPoEServer: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const startEditPPPoEUser = (user: PPPoEUser) => {
+    setEditingUser({
+      ...user,
+      password: ''
+    });
+  };
+
+  const updateEditingUserField = (field: keyof PPPoEUser, value: any) => {
+    if (!editingUser) return;
+    setEditingUser({ ...editingUser, [field]: value });
+  };
+
+  const savePPPoEUserEditHandler = async () => {
+    if (!editingUser || !editingUser.id) return;
+    try {
+      setLoading(true);
+      const updates: Partial<PPPoEUser> = {
+        username: editingUser.username,
+        enabled: editingUser.enabled
+      };
+      if (editingUser.password && editingUser.password.trim()) {
+        updates.password = editingUser.password;
+      }
+      if (typeof editingUser.billing_profile_id === 'number') {
+        updates.billing_profile_id = editingUser.billing_profile_id;
+      }
+      await apiClient.updatePPPoEUser(editingUser.id, updates);
+      setEditingUser(null);
+      await loadData();
+    } catch (e: any) {
+      alert(`Failed to update user: ${e.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const cancelPPPoEUserEdit = () => {
+    setEditingUser(null);
   };
 
   const addProfileHandler = async () => {
@@ -205,6 +258,69 @@ const PPPoEServer: React.FC = () => {
       await loadData();
     } catch (e: any) {
       alert(`Failed to delete billing profile: ${e.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetPoolForm = () => {
+    setNewPool({ name: '', ip_pool_start: '', ip_pool_end: '', description: '' });
+    setEditingPoolId(null);
+  };
+
+  const savePoolHandler = async () => {
+    if (!newPool.name || !newPool.ip_pool_start || !newPool.ip_pool_end) {
+      return alert('Name, Pool Start, and Pool End are required!');
+    }
+    try {
+      setLoading(true);
+      if (editingPoolId == null) {
+        await apiClient.addPPPoEPool({
+          name: newPool.name,
+          ip_pool_start: newPool.ip_pool_start,
+          ip_pool_end: newPool.ip_pool_end,
+          description: newPool.description
+        });
+      } else {
+        await apiClient.updatePPPoEPool(editingPoolId, {
+          name: newPool.name,
+          ip_pool_start: newPool.ip_pool_start,
+          ip_pool_end: newPool.ip_pool_end,
+          description: newPool.description
+        });
+      }
+      resetPoolForm();
+      await loadData();
+    } catch (e: any) {
+      alert(`Failed to save PPPoE pool: ${e.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const editPoolHandler = (pool: PPPoEPool) => {
+    if (!pool.id) return;
+    setEditingPoolId(pool.id);
+    setNewPool({
+      name: pool.name,
+      ip_pool_start: pool.ip_pool_start,
+      ip_pool_end: pool.ip_pool_end,
+      description: pool.description || ''
+    });
+  };
+
+  const deletePoolHandler = async (pool: PPPoEPool) => {
+    if (!pool.id) return;
+    if (!confirm(`Delete PPPoE pool "${pool.name}"?`)) return;
+    try {
+      setLoading(true);
+      await apiClient.deletePPPoEPool(pool.id);
+      if (editingPoolId === pool.id) {
+        resetPoolForm();
+      }
+      await loadData();
+    } catch (e: any) {
+      alert(`Failed to delete PPPoE pool: ${e.message}`);
     } finally {
       setLoading(false);
     }
@@ -306,6 +422,39 @@ const PPPoEServer: React.FC = () => {
                       />
                     </div>
                   </div>
+
+                <div>
+                  <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Use Saved Pool (Optional)</label>
+                  <select
+                    value={selectedPoolId !== null ? String(selectedPoolId) : ''}
+                    onChange={e => {
+                      const value = e.target.value;
+                      if (!value) {
+                        setSelectedPoolId(null);
+                        return;
+                      }
+                      const id = parseInt(value, 10);
+                      const pool = pppoePools.find(p => p.id === id);
+                      setSelectedPoolId(id);
+                      if (pool) {
+                        setPppoeServer({
+                          ...pppoeServer,
+                          ip_pool_start: pool.ip_pool_start,
+                          ip_pool_end: pool.ip_pool_end
+                        });
+                      }
+                    }}
+                    disabled={pppoeStatus?.running || pppoePools.length === 0}
+                    className="w-full bg-white border border-slate-200 rounded-md px-2 py-1.5 text-[10px] font-bold disabled:opacity-50 focus:ring-1 focus:ring-slate-900 outline-none"
+                  >
+                    <option value="">Manual IP range...</option>
+                    {pppoePools.map(pool => (
+                      <option key={pool.id} value={pool.id}>
+                        {pool.name} ({pool.ip_pool_start} - {pool.ip_pool_end})
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 </div>
 
                 <div className="space-y-3">
@@ -356,6 +505,119 @@ const PPPoEServer: React.FC = () => {
                     )}
                   </div>
                 </div>
+              </div>
+            </div>
+
+            <div className="bg-white border border-slate-200 rounded-lg overflow-hidden flex flex-col">
+              <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+                <h4 className="text-[9px] font-black text-slate-900 uppercase tracking-widest">PPPoE IP Pools</h4>
+                <span className="text-[8px] font-bold text-slate-400 bg-white px-1.5 py-0.5 rounded border border-slate-200">{pppoePools.length}</span>
+              </div>
+              <div className="p-3 border-b border-slate-100 bg-slate-50/30">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
+                  <div>
+                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Pool Name</label>
+                    <input
+                      type="text"
+                      value={newPool.name || ''}
+                      onChange={e => setNewPool({ ...newPool, name: e.target.value })}
+                      className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-[10px] font-bold outline-none"
+                      placeholder="Example: Default Pool"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Description</label>
+                    <input
+                      type="text"
+                      value={newPool.description || ''}
+                      onChange={e => setNewPool({ ...newPool, description: e.target.value })}
+                      className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-[10px] font-mono outline-none"
+                      placeholder="Optional"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Pool Start</label>
+                    <input
+                      type="text"
+                      value={newPool.ip_pool_start || ''}
+                      onChange={e => setNewPool({ ...newPool, ip_pool_start: e.target.value })}
+                      className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-[10px] font-mono outline-none"
+                      placeholder="192.168.100.10"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Pool End</label>
+                    <input
+                      type="text"
+                      value={newPool.ip_pool_end || ''}
+                      onChange={e => setNewPool({ ...newPool, ip_pool_end: e.target.value })}
+                      className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-[10px] font-mono outline-none"
+                      placeholder="192.168.100.254"
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={savePoolHandler}
+                    disabled={loading}
+                    className="flex-1 bg-slate-900 text-white py-1.5 rounded text-[9px] font-black uppercase tracking-widest hover:bg-black transition-all disabled:opacity-50"
+                  >
+                    {editingPoolId == null ? 'Add Pool' : 'Update Pool'}
+                  </button>
+                  {editingPoolId != null && (
+                    <button
+                      onClick={resetPoolForm}
+                      type="button"
+                      disabled={loading}
+                      className="px-3 py-1.5 rounded text-[9px] font-black uppercase tracking-widest border border-slate-300 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="max-h-[180px] overflow-y-auto divide-y divide-slate-100">
+                {pppoePools.length > 0 ? (
+                  pppoePools.map(pool => (
+                    <div key={pool.id} className="px-3 py-2 flex items-center justify-between group">
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-900">{pool.name}</p>
+                        <p className="text-[8px] text-slate-500 font-mono">
+                          {pool.ip_pool_start} - {pool.ip_pool_end}
+                        </p>
+                        {pool.description ? (
+                          <p className="text-[7px] text-slate-400 font-bold uppercase tracking-widest">
+                            {pool.description}
+                          </p>
+                        ) : null}
+                      </div>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                        <button
+                          onClick={() => editPoolHandler(pool)}
+                          className="text-slate-500 hover:text-slate-800 p-1"
+                          title="Edit Pool"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15.232 5.232l3.536 3.536M4 20h4.75L19 9.75 14.25 5 4 15.75V20z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => deletePoolHandler(pool)}
+                          className="text-red-500 hover:text-red-700 p-1"
+                          title="Delete Pool"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="py-6 text-center">
+                    <p className="text-[9px] text-slate-400 uppercase font-black tracking-widest">No PPPoE pools defined</p>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -511,50 +773,135 @@ const PPPoEServer: React.FC = () => {
                 >
                   Create User
                 </button>
-              </div>
-            </div>
-
-            <div className="bg-white border border-slate-200 rounded-lg overflow-hidden flex flex-col flex-grow min-h-[200px]">
-              <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
-                <h4 className="text-[9px] font-black text-slate-900 uppercase tracking-widest">PPPoE Accounts</h4>
-                <span className="text-[8px] font-bold text-slate-400 bg-white px-1.5 py-0.5 rounded border border-slate-200">{pppoeUsers.length}</span>
-              </div>
-              <div className="overflow-y-auto max-h-[250px] divide-y divide-slate-100">
-                {pppoeUsers.length > 0 ? pppoeUsers.map(user => (
-                  <div key={user.id} className="flex items-center justify-between px-3 py-2 hover:bg-slate-50 transition-all group">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-1.5 h-1.5 rounded-full ${user.enabled ? 'bg-green-500' : 'bg-slate-300'}`}></div>
-                      <div>
-                        <p className="text-[10px] font-bold text-slate-900 leading-tight">{user.username}</p>
-                        <div className="flex items-center gap-1.5">
-                          <p className="text-[7px] text-slate-400 uppercase font-black tracking-tighter">
-                            ID: {user.id} • {user.created_at ? new Date(user.created_at).toLocaleDateString() : 'NO DATE'}
-                          </p>
-                          {user.billing_profile_id && (
-                            <span className="text-[6px] bg-blue-100 text-blue-600 px-1 rounded font-black">
-                              {pppoeBillingProfiles.find(bp => bp.id === user.billing_profile_id)?.name || 'BILLED'}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    <button 
-                      onClick={() => deletePPPoEUserHandler(user.id!, user.username)} 
-                      className="text-red-500 hover:text-red-700 p-1 opacity-0 group-hover:opacity-100 transition-all"
-                      title="Delete User"
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                )) : (
-                  <div className="py-8 text-center">
-                    <p className="text-[9px] text-slate-400 uppercase font-black tracking-widest">No accounts</p>
+                {lastCreatedAccountNumber && (
+                  <div className="text-[8px] text-slate-500 font-mono">
+                    Last Account No: <span className="font-bold text-slate-700">{lastCreatedAccountNumber}</span>
                   </div>
                 )}
               </div>
             </div>
+          </div>
+        </div>
+        
+        <div className="px-4 pb-4">
+          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+            <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+              <h4 className="text-[10px] font-black text-slate-900 uppercase tracking-widest">PPPoE Accounts</h4>
+              <span className="text-[9px] font-bold text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200">{pppoeUsers.length}</span>
+            </div>
+            <div className="max-h-[260px] overflow-y-auto divide-y divide-slate-100">
+              {pppoeUsers.length > 0 ? pppoeUsers.map(user => (
+                <div key={user.id} className="px-3 py-2 flex items-center justify-between gap-3 hover:bg-slate-50 transition-all">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-2 h-2 rounded-full ${user.enabled ? 'bg-green-500' : 'bg-slate-300'}`}></div>
+                    <div className="flex flex-col">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[11px] font-black text-slate-900">{user.username}</span>
+                        {user.account_number && (
+                          <span className="text-[8px] bg-slate-900 text-white px-1.5 py-0.5 rounded font-mono">
+                            {user.account_number}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                        <span className="text-[8px] text-slate-500 font-bold uppercase tracking-tight">
+                          ID: {user.id} • {user.created_at ? new Date(user.created_at).toLocaleDateString() : 'NO DATE'}
+                        </span>
+                        {user.billing_profile_id && (
+                          <span className="text-[8px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded font-black">
+                            {pppoeBillingProfiles.find(bp => bp.id === user.billing_profile_id)?.name || 'BILLED'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => startEditPPPoEUser(user)}
+                      className="px-2 py-1 text-[8px] font-black uppercase tracking-widest border border-slate-300 rounded text-slate-700 hover:bg-slate-50"
+                    >
+                      Edit
+                    </button>
+                    <button 
+                      onClick={() => deletePPPoEUserHandler(user.id!, user.username)} 
+                      className="px-2 py-1 text-[8px] font-black uppercase tracking-widest border border-red-200 text-red-600 rounded hover:bg-red-50"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              )) : (
+                <div className="py-6 text-center">
+                  <p className="text-[9px] text-slate-400 uppercase font-black tracking-widest">No accounts</p>
+                </div>
+              )}
+            </div>
+            {editingUser && (
+              <div className="border-t border-slate-200 bg-slate-50/60 px-3 py-3">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-end">
+                  <div className="space-y-1">
+                    <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Username</span>
+                    <input
+                      type="text"
+                      value={editingUser.username}
+                      onChange={e => updateEditingUserField('username', e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-[10px] font-bold outline-none"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">New Password</span>
+                    <input
+                      type="password"
+                      value={editingUser.password}
+                      onChange={e => updateEditingUserField('password', e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-[10px] font-mono outline-none"
+                      placeholder="Leave blank to keep"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Billing Profile</span>
+                    <select
+                      value={editingUser.billing_profile_id || ''}
+                      onChange={e => updateEditingUserField('billing_profile_id', e.target.value ? parseInt(e.target.value) : undefined)}
+                      className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-[10px] font-bold outline-none"
+                    >
+                      <option value="">None</option>
+                      {pppoeBillingProfiles.map(bp => (
+                        <option key={bp.id} value={bp.id}>{bp.name} (₱{bp.price})</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="flex items-center gap-1 text-[9px] text-slate-600">
+                      <input
+                        type="checkbox"
+                        checked={!!editingUser.enabled}
+                        onChange={e => updateEditingUserField('enabled', e.target.checked ? 1 : 0)}
+                        className="w-3 h-3"
+                      />
+                      <span className="font-bold uppercase tracking-widest">Enabled</span>
+                    </label>
+                    <div className="flex gap-1 mt-1">
+                      <button
+                        onClick={savePPPoEUserEditHandler}
+                        disabled={loading}
+                        className="flex-1 bg-slate-900 text-white py-1.5 rounded text-[8px] font-black uppercase tracking-widest hover:bg-black disabled:opacity-50"
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={cancelPPPoEUserEdit}
+                        type="button"
+                        disabled={loading}
+                        className="flex-1 border border-slate-300 text-slate-700 py-1.5 rounded text-[8px] font-black uppercase tracking-widest hover:bg-slate-50 disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

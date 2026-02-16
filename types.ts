@@ -110,6 +110,7 @@ export interface PPPoEServerConfig {
 
 export interface PPPoEUser {
   id?: number;
+  account_number?: string;
   username: string;
   password: string;
   enabled: number;
@@ -141,6 +142,15 @@ export interface PPPoESession {
   uptime: number;
   rx_bytes: number;
   tx_bytes: number;
+}
+
+export interface PPPoEPool {
+  id?: number;
+  name: string;
+  ip_pool_start: string;
+  ip_pool_end: string;
+  description?: string | null;
+  created_at?: string;
 }
 
 export interface UserSession {

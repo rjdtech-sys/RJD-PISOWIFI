@@ -3138,6 +3138,58 @@ app.delete('/api/network/pppoe/billing-profiles/:id', requireAdmin, async (req, 
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// PPPoE IP Pool API
+app.get('/api/network/pppoe/pools', requireAdmin, async (req, res) => {
+  try {
+    const pools = await db.all('SELECT * FROM pppoe_pools ORDER BY created_at DESC');
+    res.json(pools);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/network/pppoe/pools', requireAdmin, async (req, res) => {
+  const { name, ip_pool_start, ip_pool_end, description } = req.body;
+  if (!name || !ip_pool_start || !ip_pool_end) {
+    return res.status(400).json({ error: 'Name, pool start, and pool end are required' });
+  }
+  try {
+    const result = await db.run(
+      'INSERT INTO pppoe_pools (name, ip_pool_start, ip_pool_end, description) VALUES (?, ?, ?, ?)',
+      [name, ip_pool_start, ip_pool_end, description || null]
+    );
+    res.json({ success: true, id: result.lastID });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/network/pppoe/pools/:id', requireAdmin, async (req, res) => {
+  try {
+    const poolId = parseInt(req.params.id);
+    const { name, ip_pool_start, ip_pool_end, description } = req.body || {};
+    const fields = [];
+    const values = [];
+
+    if (name !== undefined) { fields.push('name = ?'); values.push(name); }
+    if (ip_pool_start !== undefined) { fields.push('ip_pool_start = ?'); values.push(ip_pool_start); }
+    if (ip_pool_end !== undefined) { fields.push('ip_pool_end = ?'); values.push(ip_pool_end); }
+    if (description !== undefined) { fields.push('description = ?'); values.push(description); }
+
+    if (fields.length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+
+    values.push(poolId);
+    await db.run(`UPDATE pppoe_pools SET ${fields.join(', ')} WHERE id = ?`, values);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/network/pppoe/pools/:id', requireAdmin, async (req, res) => {
+  try {
+    const poolId = parseInt(req.params.id);
+    await db.run('DELETE FROM pppoe_pools WHERE id = ?', [poolId]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // PPPoE Logs API
 app.post('/api/network/pppoe/restart', requireAdmin, async (req, res) => {
   try {
