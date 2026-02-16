@@ -11,7 +11,7 @@ const PortalEditor: React.FC = () => {
 
   const [mode, setMode] = useState<'visual' | 'code'>('visual');
 
-  const handleChange = <K extends keyof PortalConfig>(key: K, value: PortalConfig[K]) => {
+  const handleChange = (key: keyof PortalConfig, value: PortalConfig[keyof PortalConfig]) => {
     setConfig(prev => ({ ...prev, [key]: value }));
     setHasChanges(true);
   };
