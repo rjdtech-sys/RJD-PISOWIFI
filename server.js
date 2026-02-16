@@ -2293,7 +2293,7 @@ app.post('/api/nodemcu/pulse', async (req, res) => {
       if (d.macAddress.toUpperCase() === macAddress.toUpperCase()) {
         return {
           ...d,
-          totalPulses: (d.totalPulses || 0) + 1,
+          totalPulses: (d.totalPulses || 0) + denomination,
           totalRevenue: (d.totalRevenue || 0) + denomination,
           lastSeen: new Date().toISOString()
         };
