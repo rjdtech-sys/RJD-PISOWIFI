@@ -510,7 +510,7 @@ const LandingPage: React.FC<Props> = ({ rates, sessions, onSessionStart, refresh
       <main className="relative z-20">
         <div className="portal-card">
           {mySession ? (
-            <div className="mb-6 animate-in fade-in zoom-in duration-500">
+              <div className="mb-6 animate-in fade-in zoom-in duration-500">
               <p className="text-blue-600 text-[10px] font-black uppercase tracking-[0.2em] mb-2">Authenticated Session</p>
               <h2 className={`text-6xl font-black mb-4 tracking-tighter ${mySession.isPaused ? 'text-orange-500 animate-pulse' : 'text-slate-900'}`}>
                 {formatSessionTime(mySession.remainingSeconds)}
@@ -527,7 +527,6 @@ const LandingPage: React.FC<Props> = ({ rates, sessions, onSessionStart, refresh
                     Internet Access Live
                   </span>
                 )}
-                <span>Device MAC: {myMac}</span>
               </div>
               
               {!mySession.isPaused ? (
@@ -594,8 +593,16 @@ const LandingPage: React.FC<Props> = ({ rates, sessions, onSessionStart, refresh
           )}
 
           <div className="mx-6 mb-6 text-[9px] text-slate-400 font-bold uppercase tracking-[0.2em] text-center">
-            <div>Device IP: {clientIp || 'Detecting...'}</div>
-            <div>Device MAC: {isMacLoading ? 'Detecting...' : myMac}</div>
+            <div className="flex flex-wrap items-center justify-center gap-4">
+              <span>Device IP: {clientIp || 'Detecting...'}</span>
+              <span>Device MAC: {isMacLoading ? 'Detecting...' : myMac}</span>
+              {(creditPesos > 0 || creditMinutes > 0) && (
+                <span>
+                  Credit: ₱{creditPesos}
+                  {creditMinutes > 0 ? ` / ${creditMinutes}m` : ''}
+                </span>
+              )}
+            </div>
           </div>
 
           {isRevoked && (
@@ -647,18 +654,12 @@ const LandingPage: React.FC<Props> = ({ rates, sessions, onSessionStart, refresh
             {mySession ? 'ADD MORE TIME' : 'INSERT COIN'}
           </button>
           {(creditPesos > 0 || creditMinutes > 0) && (
-            <>
-              <button
-                onClick={handleUseCredit}
-                className="portal-btn mt-3 bg-emerald-600 hover:bg-emerald-700"
-              >
-                Gamitin Credit
-              </button>
-              <div className="mt-2 text-[9px] font-black uppercase tracking-[0.2em] text-amber-500 text-center">
-                Credit: ₱{creditPesos}
-                {creditMinutes > 0 ? ` / ${creditMinutes}m` : ''}
-              </div>
-            </>
+            <button
+              onClick={handleUseCredit}
+              className="portal-btn mt-3 bg-emerald-600 hover:bg-emerald-700"
+            >
+              Gamitin Credit
+            </button>
           )}
           <button
             onClick={() => setShowRatesModal(true)}
