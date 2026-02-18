@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { AdminTab, UserSession, Rate, WifiDevice } from './types';
+import { AdminTab, UserSession, Rate, WifiDevice, NodeMCUDevice } from './types';
 import LandingPage from './components/Portal/LandingPage';
 import Analytics from './components/Admin/Analytics';
 import RatesManager from './components/Admin/RatesManager';
@@ -477,6 +477,7 @@ const SidebarItem: React.FC<{ active: boolean; onClick: () => void; icon: string
 );
 
 const SalesInventory: React.FC<{ sessions: UserSession[] }> = ({ sessions }) => {
+  const [nodeMcuDevices, setNodeMcuDevices] = useState<NodeMCUDevice[]>([]);
   const [fromDate, setFromDate] = useState<string>(() => {
     const now = new Date();
     return now.toISOString().slice(0, 10);
@@ -493,6 +494,24 @@ const SalesInventory: React.FC<{ sessions: UserSession[] }> = ({ sessions }) => 
   const [showOldestFirst, setShowOldestFirst] = useState<boolean>(false);
   const [showPaymentsBreakdown, setShowPaymentsBreakdown] = useState<boolean>(false);
   const [showNotCredited, setShowNotCredited] = useState<boolean>(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadDevices = async () => {
+      try {
+        const devices = await apiClient.getNodeMCUDevices();
+        if (!cancelled && Array.isArray(devices)) {
+          setNodeMcuDevices(devices.filter((d: any) => d.status === 'accepted' || d.status === 'connected'));
+        }
+      } catch (e) {
+        console.error('Failed to load NodeMCU devices for Sales Inventory');
+      }
+    };
+    loadDevices();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const applyDatePreset = (preset: string) => {
     const now = new Date();
@@ -538,11 +557,20 @@ const SalesInventory: React.FC<{ sessions: UserSession[] }> = ({ sessions }) => 
   const parseDate = (value: string) => new Date(value + 'T00:00:00');
 
   const enhancedSessions = useMemo(() => {
+    const findSlotLabel = (slotKey: string) => {
+      if (!slotKey || slotKey === 'main') return 'MAIN';
+      const device = nodeMcuDevices.find(d => d.macAddress.toUpperCase() === slotKey.toUpperCase());
+      if (device) return device.name || device.macAddress || slotKey;
+      return slotKey;
+    };
+
     return sessions.map((s) => {
       const rawCreatedAt = (s as any).connectedAt || (s as any).createdAt || new Date().toISOString();
       const createdAt = new Date(rawCreatedAt).toISOString();
+
       const type = 'coin';
-      const coinSlot = (s as any).coinSlot || 'MAIN';
+      const slotKey = (s as any).coinSlot || 'main';
+      const coinSlotLabel = findSlotLabel(slotKey);
       const mac = s.mac || (s as any).customer_mac || '';
       const account = (s as any).account || '';
       const customer = (s as any).customer || '';
@@ -551,14 +579,15 @@ const SalesInventory: React.FC<{ sessions: UserSession[] }> = ({ sessions }) => 
         ...s,
         __createdAt: createdAt,
         __type: type,
-        __coinSlot: coinSlot as string,
+        __coinSlotKey: slotKey as string,
+        __coinSlotLabel: coinSlotLabel,
         __mac: mac as string,
         __account: account as string,
         __customer: customer as string,
         __device: device as string,
       };
     });
-  }, [sessions]);
+  }, [sessions, nodeMcuDevices]);
 
   const filtered = useMemo(() => {
     const from = parseDate(fromDate);
@@ -569,7 +598,7 @@ const SalesInventory: React.FC<{ sessions: UserSession[] }> = ({ sessions }) => 
       const created = new Date(s.__createdAt);
       if (created < from || created > new Date(to.getTime() + 24 * 60 * 60 * 1000 - 1)) return false;
       if (typeFilter !== 'all' && s.__type !== typeFilter) return false;
-      if (coinSlotFilter !== 'all' && s.__coinSlot !== coinSlotFilter) return false;
+      if (coinSlotFilter !== 'all' && s.__coinSlotKey !== coinSlotFilter) return false;
       if (upperSearch) {
         const mac = (s.__mac || '').toUpperCase();
         const account = (s.__account || '').toUpperCase();
@@ -603,12 +632,20 @@ const SalesInventory: React.FC<{ sessions: UserSession[] }> = ({ sessions }) => 
   const paginated = useMemo(() => filtered.slice(0, itemsPerPage), [filtered, itemsPerPage]);
 
   const uniqueCoinSlots = useMemo(() => {
-    const set = new Set<string>();
-    enhancedSessions.forEach((s: any) => {
-      if (s.__coinSlot) set.add(s.__coinSlot);
+    const map = new Map<string, string>();
+    map.set('main', 'MAIN');
+    nodeMcuDevices.forEach((d) => {
+      map.set(d.macAddress, d.name || d.macAddress);
     });
-    return Array.from(set);
-  }, [enhancedSessions]);
+    enhancedSessions.forEach((s: any) => {
+      const key = s.__coinSlotKey;
+      const label = s.__coinSlotLabel || key;
+      if (key) {
+        map.set(key, label);
+      }
+    });
+    return Array.from(map.entries()).map(([key, label]) => ({ key, label }));
+  }, [nodeMcuDevices, enhancedSessions]);
 
   useEffect(() => {
     applyDatePreset(datePreset);
@@ -619,7 +656,7 @@ const SalesInventory: React.FC<{ sessions: UserSession[] }> = ({ sessions }) => 
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-xl font-black text-slate-900 uppercase tracking-tight">Sales Inventory</h1>
-          <p className="text-xs text-slate-500">Monitorahin ang lahat ng benta ayon sa type at petsa.</p>
+          <p className="text-xs text-slate-500">Monitor all sales by coinslot, type, and date.</p>
         </div>
         <div className="bg-white rounded-2xl px-5 py-3 shadow-sm border border-slate-100 flex items-baseline gap-3">
           <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Sales Today</span>
@@ -689,9 +726,9 @@ const SalesInventory: React.FC<{ sessions: UserSession[] }> = ({ sessions }) => 
               onChange={(e) => setCoinSlotFilter(e.target.value)}
               className="w-full admin-input text-xs"
             >
-              <option value="all">All</option>
+              <option value="all">All Coinslots</option>
               {uniqueCoinSlots.map((slot) => (
-                <option key={slot} value={slot}>{slot}</option>
+                <option key={slot.key} value={slot.key}>{slot.label}</option>
               ))}
             </select>
           </div>
