@@ -1614,7 +1614,7 @@ app.post('/api/credits/add', async (req, res) => {
     } else {
       const id = `device_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       await db.run(
-        'INSERT INTO wifi_devices (id, mac, ip, hostname, interface, ssid, signal, connected_at, last_seen, is_active, custom_name, credit_pesos, credit_minutes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO wifi_devices (id, mac, ip, hostname, interface, ssid, signal, connected_at, last_seen, is_active, custom_name, credit_pesos, credit_minutes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [id, mac, clientIp, '', '', '', 0, Date.now(), Date.now(), 0, '', safePesos, safeMinutes]
       );
     }
@@ -1684,6 +1684,12 @@ app.post('/api/credits/use', async (req, res) => {
     if (totalCreditPesos > 0 && totalCreditMinutes > 0) {
       const perPeso = totalCreditMinutes / totalCreditPesos;
       minutes = Math.floor(perPeso * requestedPesos);
+      if (minutes <= 0 && totalCreditMinutes > 0) {
+        minutes = 1;
+      }
+      if (minutes > totalCreditMinutes) {
+        minutes = totalCreditMinutes;
+      }
     } else if (totalCreditMinutes > 0) {
       minutes = totalCreditMinutes;
     }
