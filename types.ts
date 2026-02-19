@@ -16,6 +16,8 @@ export interface SystemConfig {
    centralPortalIp?: string;
   // Deprecated - kept for backward compatibility
   serialPort?: string;
+  relayPin?: number | null;
+  relayActiveMode?: 'high' | 'low';
 }
 
 export interface CoinSlotConfig {

@@ -12,6 +12,8 @@ const HardwareSetup: React.FC<Props> = ({ onClose, onSaved }) => {
   const [board, setBoard] = useState<BoardType>('none');
   const [pin, setPin] = useState(3);
   const [boardModel, setBoardModel] = useState<string>('orange_pi_one');
+  const [relayPin, setRelayPin] = useState<number | null>(null);
+  const [relayActiveMode, setRelayActiveMode] = useState<'high' | 'low'>('high');
 
   const [coinSlots, setCoinSlots] = useState<CoinSlotConfig[]>([
     { id: 1, enabled: true, pin: 4, denomination: 1, name: '1 Peso Slot' },
@@ -33,6 +35,12 @@ const HardwareSetup: React.FC<Props> = ({ onClose, onSaved }) => {
       if (cfg.coinSlots && cfg.coinSlots.length > 0) {
         setCoinSlots(cfg.coinSlots);
       }
+      if (typeof cfg.relayPin === 'number') {
+        setRelayPin(cfg.relayPin);
+      }
+      if (cfg.relayActiveMode === 'low' || cfg.relayActiveMode === 'high') {
+        setRelayActiveMode(cfg.relayActiveMode);
+      }
       if (typeof cfg.centralPortalIpEnabled === 'boolean') {
         setCentralPortalIpEnabled(cfg.centralPortalIpEnabled);
       }
@@ -53,7 +61,9 @@ const HardwareSetup: React.FC<Props> = ({ onClose, onSaved }) => {
 
         coinSlots: board === 'nodemcu_esp' ? coinSlots : null,
         centralPortalIpEnabled,
-        centralPortalIp: centralPortalIp || ''
+        centralPortalIp: centralPortalIp || '',
+        relayPin: board === 'none' || board === 'nodemcu_esp' ? null : relayPin,
+        relayActiveMode: relayPin != null ? relayActiveMode : 'high'
       });
       onSaved();
       onClose();
@@ -261,7 +271,63 @@ const HardwareSetup: React.FC<Props> = ({ onClose, onSaved }) => {
               <span>⚠️</span> Note: Ensure your wiring matches the physical pin number selected.
             </p>
           </div>
+          <div className="mt-6">
+            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Relay GPIO Pin (Output)</label>
+            <div className="grid grid-cols-4 sm:grid-cols-8 gap-2">
+              <button
+                onClick={() => setRelayPin(null)}
+                className={`py-3 rounded-xl border text-xs font-black transition-all ${
+                  relayPin === null
+                    ? 'bg-slate-900 border-slate-900 text-white shadow-lg shadow-slate-500/20 scale-105'
+                    : 'border-slate-200 text-slate-400 hover:border-slate-400'
+                }`}
+              >
+                OFF
+              </button>
+              {[2, 3, 4, 7, 8, 10, 11, 14, 15, 17, 18, 22, 23, 24, 25, 27].map(p => (
+                <button
+                  key={p}
+                  onClick={() => setRelayPin(p)}
+                  className={`py-3 rounded-xl border text-xs font-black transition-all ${
+                    relayPin === p
+                      ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/20 scale-105'
+                      : 'border-slate-200 text-slate-400 hover:border-slate-400'
+                  }`}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Relay Mode</span>
+              <div className="flex items-center gap-2 text-[10px] font-bold">
+                <button
+                  type="button"
+                  onClick={() => setRelayActiveMode('high')}
+                  className={`px-2 py-1 rounded border ${
+                    relayActiveMode === 'high'
+                      ? 'border-slate-900 bg-slate-900 text-white'
+                      : 'border-slate-300 text-slate-600'
+                  }`}
+                >
+                  Active High
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRelayActiveMode('low')}
+                  className={`px-2 py-1 rounded border ${
+                    relayActiveMode === 'low'
+                      ? 'border-slate-900 bg-slate-900 text-white'
+                      : 'border-slate-300 text-slate-600'
+                  }`}
+                >
+                  Active Low
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
+
 
         <div className="p-6 pb-10 flex flex-col gap-3">
           <button
