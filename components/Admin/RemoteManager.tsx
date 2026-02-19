@@ -45,6 +45,19 @@ const RemoteManager: React.FC = () => {
   const [joinMessage, setJoinMessage] = useState<string | null>(null);
   const [joinError, setJoinError] = useState<string | null>(null);
 
+  const getAdminHeaders = (customHeaders: HeadersInit = {}): HeadersInit => {
+    const headers: Record<string, string> = {
+      ...customHeaders as Record<string, string>
+    };
+    const token = typeof localStorage !== 'undefined'
+      ? localStorage.getItem('ajc_admin_token')
+      : null;
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    return headers;
+  };
+
   useEffect(() => {
     loadStatus();
     loadInstallState();
@@ -54,7 +67,9 @@ const RemoteManager: React.FC = () => {
     setStatusLoading(true);
     setStatusError(null);
     try {
-      const res = await fetch('/api/zerotier/status');
+      const res = await fetch('/api/zerotier/status', {
+        headers: getAdminHeaders()
+      });
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
         const message = errBody && errBody.error ? errBody.error : `HTTP ${res.status}`;
@@ -72,7 +87,9 @@ const RemoteManager: React.FC = () => {
 
   const loadInstallState = async () => {
     try {
-      const res = await fetch('/api/zerotier/install-status');
+      const res = await fetch('/api/zerotier/install-status', {
+        headers: getAdminHeaders()
+      });
       if (!res.ok) {
         return;
       }
@@ -89,7 +106,9 @@ const RemoteManager: React.FC = () => {
 
     const interval = setInterval(async () => {
       try {
-        const res = await fetch('/api/zerotier/install-status');
+        const res = await fetch('/api/zerotier/install-status', {
+          headers: getAdminHeaders()
+        });
         if (!res.ok) {
           throw new Error(`HTTP ${res.status}`);
         }
@@ -121,7 +140,7 @@ const RemoteManager: React.FC = () => {
     try {
       const res = await fetch('/api/zerotier/install', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+        headers: getAdminHeaders({ 'Content-Type': 'application/json' })
       });
 
       const data = await res.json().catch(() => ({}));
@@ -166,7 +185,7 @@ const RemoteManager: React.FC = () => {
     try {
       const res = await fetch('/api/zerotier/join', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAdminHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ networkId: trimmed })
       });
 
@@ -521,4 +540,3 @@ const RemoteManager: React.FC = () => {
 };
 
 export default RemoteManager;
-
