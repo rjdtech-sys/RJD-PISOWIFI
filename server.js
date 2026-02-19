@@ -6,7 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const si = require('systeminformation');
 const db = require('./lib/db');
-const { initGPIO, updateGPIO, registerSlotCallback, unregisterSlotCallback } = require('./lib/gpio');
+const { initGPIO, updateGPIO, registerSlotCallback, unregisterSlotCallback, setRelayState } = require('./lib/gpio');
 const NodeMCUListener = require('./lib/nodemcu-listener');
 const { getNodeMCULicenseManager } = require('./lib/nodemcu-license');
 const network = require('./lib/network');
@@ -2517,6 +2517,8 @@ app.get('/api/config', requireAdmin, async (req, res) => {
     const registrationKey = await db.get('SELECT value FROM config WHERE key = ?', ['registrationKey']);
     const centralPortalIpEnabled = await db.get('SELECT value FROM config WHERE key = ?', ['centralPortalIpEnabled']);
     const centralPortalIp = await db.get('SELECT value FROM config WHERE key = ?', ['centralPortalIp']);
+    const relayPin = await db.get('SELECT value FROM config WHERE key = ?', ['relayPin']);
+    const relayActiveMode = await db.get('SELECT value FROM config WHERE key = ?', ['relayActiveMode']);
     
     res.json({ 
       boardType: board?.value || 'none', 
@@ -2528,7 +2530,9 @@ app.get('/api/config', requireAdmin, async (req, res) => {
       nodemcuDevices: nodemcuDevices?.value ? JSON.parse(nodemcuDevices.value) : [],
       registrationKey: registrationKey?.value || '7B3F1A9',
       centralPortalIpEnabled: centralPortalIpEnabled?.value === '1' || centralPortalIpEnabled?.value === 'true',
-      centralPortalIp: centralPortalIp?.value || ''
+      centralPortalIp: centralPortalIp?.value || '',
+      relayPin: relayPin?.value ? parseInt(relayPin.value, 10) : null,
+      relayActiveMode: relayActiveMode?.value === 'low' ? 'low' : 'high'
     });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -2557,14 +2561,50 @@ app.post('/api/config', requireAdmin, async (req, res) => {
       );
     }
 
+    if (typeof req.body.relayPin !== 'undefined') {
+      const relayPinValue = req.body.relayPin === null ? '' : String(req.body.relayPin);
+      await db.run(
+        'INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)',
+        ['relayPin', relayPinValue]
+      );
+    }
+
+    if (typeof req.body.relayActiveMode !== 'undefined') {
+      const mode = req.body.relayActiveMode === 'low' ? 'low' : 'high';
+      await db.run(
+        'INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)',
+        ['relayActiveMode', mode]
+      );
+    }
+
     // Handle NodeMCU ESP configuration
     if (req.body.boardType === 'nodemcu_esp') {
       await db.run('INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)', ['espIpAddress', req.body.espIpAddress || '192.168.4.1']);
       await db.run('INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)', ['espPort', req.body.espPort || '80']);
       await db.run('INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)', ['coinSlots', JSON.stringify(req.body.coinSlots || [])]);
-      updateGPIO(req.body.boardType, req.body.coinPin, req.body.boardModel, req.body.espIpAddress, req.body.espPort, req.body.coinSlots, req.body.nodemcuDevices);
+      updateGPIO(
+        req.body.boardType,
+        req.body.coinPin,
+        req.body.boardModel,
+        req.body.espIpAddress,
+        req.body.espPort,
+        req.body.coinSlots,
+        req.body.nodemcuDevices,
+        req.body.relayPin,
+        req.body.relayActiveMode
+      );
     } else {
-      updateGPIO(req.body.boardType, req.body.coinPin, req.body.boardModel, null, null, null, req.body.nodemcuDevices);
+      updateGPIO(
+        req.body.boardType,
+        req.body.coinPin,
+        req.body.boardModel,
+        null,
+        null,
+        null,
+        req.body.nodemcuDevices,
+        req.body.relayPin,
+        req.body.relayActiveMode
+      );
     }
     
     // Handle multi-NodeMCU devices
@@ -4652,6 +4692,8 @@ async function bootupRestore(isRestricted = false) {
   const espPort = await db.get('SELECT value FROM config WHERE key = ?', ['espPort']);
   const coinSlots = await db.get('SELECT value FROM config WHERE key = ?', ['coinSlots']);
   const nodemcuDevices = await db.get('SELECT value FROM config WHERE key = ?', ['nodemcuDevices']);
+  const relayPinRow = await db.get('SELECT value FROM config WHERE key = ?', ['relayPin']);
+  const relayActiveModeRow = await db.get('SELECT value FROM config WHERE key = ?', ['relayActiveMode']);
   
   const coinCallback = (pesos) => {
     console.log(`[MAIN GPIO] Pulse Detected | Amount: ₱${pesos}`);
@@ -4665,11 +4707,12 @@ async function bootupRestore(isRestricted = false) {
     board?.value || 'none', 
     parseInt(pin?.value || '2'), 
     model?.value,
-    null,
     espIpAddress?.value,
     parseInt(espPort?.value || '80'),
     coinSlots?.value ? JSON.parse(coinSlots.value) : [],
-    nodemcuDevices?.value ? JSON.parse(nodemcuDevices.value) : []
+    nodemcuDevices?.value ? JSON.parse(nodemcuDevices.value) : [],
+    relayPinRow?.value ? parseInt(relayPinRow.value, 10) : null,
+    relayActiveModeRow?.value === 'low' ? 'low' : 'high'
   );
   
   // Register callbacks for individual slots (if multi-slot)

@@ -44,6 +44,8 @@ const HardwareManager: React.FC = () => {
   const [board, setBoard] = useState<BoardType>('none');
   const [pin, setPin] = useState(2);
   const [boardModel, setBoardModel] = useState<string>('orange_pi_one');
+  const [relayPin, setRelayPin] = useState<number | null>(null);
+  const [relayActiveMode, setRelayActiveMode] = useState<'high' | 'low'>('high');
   
   const [coinSlots, setCoinSlots] = useState<CoinSlotConfig[]>([]);
   const [nodemcuDevices, setNodemcuDevices] = useState<NodeMCUDevice[]>([]);
@@ -100,6 +102,12 @@ const HardwareManager: React.FC = () => {
       setBoard(cfg.boardType);
       setPin(cfg.coinPin);
       if (cfg.boardModel) setBoardModel(cfg.boardModel);
+      if (typeof cfg.relayPin === 'number') {
+        setRelayPin(cfg.relayPin);
+      }
+      if (cfg.relayActiveMode === 'low' || cfg.relayActiveMode === 'high') {
+        setRelayActiveMode(cfg.relayActiveMode);
+      }
 
       if (cfg.coinSlots && cfg.coinSlots.length > 0) {
         setCoinSlots(cfg.coinSlots);
@@ -128,7 +136,9 @@ const HardwareManager: React.FC = () => {
         boardType: board, 
         coinPin: pin,
         boardModel: board === 'orange_pi' ? boardModel : null,
-        coinSlots: coinSlots
+        coinSlots: coinSlots,
+        relayPin: board === 'none' || board === 'nodemcu_esp' ? null : relayPin,
+        relayActiveMode: relayPin != null ? relayActiveMode : 'high'
       });
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
@@ -227,6 +237,24 @@ const HardwareManager: React.FC = () => {
                          ))}
                        </select>
                      </div>
+                     <div className="flex-1">
+                       <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Relay Pin (Output)</label>
+                       <select
+                         value={relayPin !== null ? String(relayPin) : ''}
+                         onChange={(e) => {
+                           const v = e.target.value;
+                           setRelayPin(v ? parseInt(v, 10) : null);
+                         }}
+                         className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-[11px] font-bold text-slate-800 outline-none focus:ring-1 focus:ring-blue-500"
+                       >
+                         <option value="">Disabled</option>
+                         {currentOrangePins.map(p => (
+                           <option key={p} value={p}>
+                             {`Pin ${p} (${getOrangeGpioLabel(p)})`}
+                           </option>
+                         ))}
+                       </select>
+                     </div>
                      <button
                        onClick={handleSave}
                        disabled={saving}
@@ -263,6 +291,33 @@ const HardwareManager: React.FC = () => {
                          <div className="text-[9px] text-slate-500">{getOrangeGpioLabel(p)}</div>
                        </button>
                      ))}
+                   </div>
+                 </div>
+                 <div className="mt-3 flex flex-wrap items-center gap-3">
+                   <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Relay Mode</span>
+                   <div className="flex items-center gap-2 text-[10px] font-bold">
+                     <button
+                       type="button"
+                       onClick={() => setRelayActiveMode('high')}
+                       className={`px-2 py-1 rounded border ${
+                         relayActiveMode === 'high'
+                           ? 'border-slate-900 bg-slate-900 text-white'
+                           : 'border-slate-300 text-slate-600'
+                       }`}
+                     >
+                       Active High
+                     </button>
+                     <button
+                       type="button"
+                       onClick={() => setRelayActiveMode('low')}
+                       className={`px-2 py-1 rounded border ${
+                         relayActiveMode === 'low'
+                           ? 'border-slate-900 bg-slate-900 text-white'
+                           : 'border-slate-300 text-slate-600'
+                       }`}
+                     >
+                       Active Low
+                     </button>
                    </div>
                  </div>
                </div>
@@ -340,7 +395,49 @@ const HardwareManager: React.FC = () => {
                      className="w-full accent-slate-900 h-1.5 rounded-lg appearance-none bg-slate-200 cursor-pointer"
                    />
                  </div>
-                 
+                 <div className="flex-1 bg-slate-50 rounded-lg p-3 border border-slate-200">
+                   <div className="flex justify-between items-center mb-2">
+                     <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Relay Pin (Output)</label>
+                     <div className="text-[10px] font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">
+                       {relayPin != null ? `GPIO ${relayPin}` : 'Disabled'}
+                     </div>
+                   </div>
+                   <input
+                     type="range"
+                     min="2"
+                     max="27"
+                     value={relayPin != null ? relayPin : 2}
+                     onChange={(e) => setRelayPin(parseInt(e.target.value, 10))}
+                     className="w-full accent-slate-900 h-1.5 rounded-lg appearance-none bg-slate-200 cursor-pointer"
+                   />
+                   <div className="mt-3 flex flex-wrap items-center gap-3">
+                     <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Relay Mode</span>
+                     <div className="flex items-center gap-2 text-[10px] font-bold">
+                       <button
+                         type="button"
+                         onClick={() => setRelayActiveMode('high')}
+                         className={`px-2 py-1 rounded border ${
+                           relayActiveMode === 'high'
+                             ? 'border-slate-900 bg-slate-900 text-white'
+                             : 'border-slate-300 text-slate-600'
+                         }`}
+                       >
+                         Active High
+                       </button>
+                       <button
+                         type="button"
+                         onClick={() => setRelayActiveMode('low')}
+                         className={`px-2 py-1 rounded border ${
+                           relayActiveMode === 'low'
+                             ? 'border-slate-900 bg-slate-900 text-white'
+                             : 'border-slate-300 text-slate-600'
+                         }`}
+                       >
+                         Active Low
+                       </button>
+                     </div>
+                   </div>
+                 </div>
                  <button
                    onClick={handleSave}
                    disabled={saving}
