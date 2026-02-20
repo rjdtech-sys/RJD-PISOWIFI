@@ -2035,10 +2035,21 @@ app.post('/api/sessions/start', async (req, res) => {
     const pausable = rate && typeof rate.is_pausable === 'number' ? rate.is_pausable : 1;
     const seconds = minutes * 60;
 
-    const requestedToken = getSessionToken(req);
+    let requestedToken = getSessionToken(req);
     let tokenToUse = requestedToken || null;
     let migratedOldMac = null;
     let migratedOldIp = null;
+
+    const existingSessionForMac = await db.get('SELECT * FROM sessions WHERE mac = ?', [mac]);
+    if (existingSessionForMac && (existingSessionForMac.remaining_seconds || 0) > 0) {
+      if (existingSessionForMac.token && requestedToken && existingSessionForMac.token !== requestedToken) {
+        requestedToken = existingSessionForMac.token;
+        tokenToUse = existingSessionForMac.token;
+      } else if (!requestedToken && existingSessionForMac.token) {
+        requestedToken = existingSessionForMac.token;
+        tokenToUse = existingSessionForMac.token;
+      }
+    }
 
     if (requestedToken) {
       const sessionByToken = await db.get('SELECT * FROM sessions WHERE token = ?', [requestedToken]);
@@ -2080,17 +2091,21 @@ app.post('/api/sessions/start', async (req, res) => {
       } else {
         const existingByMac = await db.get('SELECT * FROM sessions WHERE mac = ?', [mac]);
         if (existingByMac) {
+          const existingToken = existingByMac.token;
+          const hasTime = (existingByMac.remaining_seconds || 0) > 0;
+          const canonicalToken = hasTime && existingToken ? existingToken : (existingToken || requestedToken);
           await db.run(
             'UPDATE sessions SET remaining_seconds = remaining_seconds + ?, total_paid = total_paid + ?, ip = ?, download_limit = ?, upload_limit = ?, token = ? WHERE mac = ?',
-            [seconds, pesos, clientIp, downloadLimit, uploadLimit, requestedToken, mac]
+            [seconds, pesos, clientIp, downloadLimit, uploadLimit, canonicalToken, mac]
           );
+          tokenToUse = canonicalToken;
         } else {
           await db.run(
             'INSERT INTO sessions (mac, ip, remaining_seconds, total_paid, download_limit, upload_limit, token, pausable) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
             [mac, clientIp, seconds, pesos, downloadLimit, uploadLimit, requestedToken, pausable]
           );
+          tokenToUse = requestedToken;
         }
-        tokenToUse = requestedToken;
       }
     }
 
@@ -4905,7 +4920,7 @@ app.post('/api/vouchers/activate', async (req, res) => {
     const { code } = req.body;
     const clientIp = req.ip.replace('::ffff:', '');
     const mac = await getMacFromIp(clientIp);
-    const requestedToken = getSessionToken(req);
+    let requestedToken = getSessionToken(req);
     
     // Validation
     if (!code || typeof code !== 'string') {
@@ -4931,11 +4946,18 @@ app.post('/api/vouchers/activate', async (req, res) => {
       });
     }
     
-    // Calculate session time in seconds
     const seconds = voucher.time_minutes * 60;
     const amount = voucher.amount;
     
-    // Prefer the browser-provided token to keep session identity stable across MAC changes
+    const existingSessionForMac = await db.get('SELECT * FROM sessions WHERE mac = ?', [mac]);
+    if (existingSessionForMac && (existingSessionForMac.remaining_seconds || 0) > 0) {
+      if (existingSessionForMac.token && requestedToken && existingSessionForMac.token !== requestedToken) {
+        requestedToken = existingSessionForMac.token;
+      } else if (!requestedToken && existingSessionForMac.token) {
+        requestedToken = existingSessionForMac.token;
+      }
+    }
+    
     let tokenToUse = requestedToken || null;
     let migratedOldMac = null;
     let migratedOldIp = null;
@@ -4969,17 +4991,21 @@ app.post('/api/vouchers/activate', async (req, res) => {
       } else {
         const existingByMac = await db.get('SELECT * FROM sessions WHERE mac = ?', [mac]);
         if (existingByMac) {
+          const existingToken = existingByMac.token;
+          const hasTime = (existingByMac.remaining_seconds || 0) > 0;
+          const canonicalToken = hasTime && existingToken ? existingToken : (existingToken || requestedToken);
           await db.run(
             'UPDATE sessions SET remaining_seconds = remaining_seconds + ?, total_paid = total_paid + ?, ip = ?, token = ? WHERE mac = ?',
-            [seconds, amount, clientIp, requestedToken, mac]
+            [seconds, amount, clientIp, canonicalToken, mac]
           );
+          tokenToUse = canonicalToken;
         } else {
           await db.run(
             'INSERT INTO sessions (mac, ip, remaining_seconds, total_paid, token) VALUES (?, ?, ?, ?, ?)',
             [mac, clientIp, seconds, amount, requestedToken]
           );
+          tokenToUse = requestedToken;
         }
-        tokenToUse = requestedToken;
       }
     }
 
