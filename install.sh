@@ -112,9 +112,12 @@ else
     fi
 fi
 
-# Ensure build tools for native modules (sqlite3, serialport) are ready
 echo -e "${GREEN}Installing global build tools...${NC}"
-npm install -g npm@latest node-gyp pm2
+if [[ "$DEB_ARCH" == "amd64" || "$DEB_ARCH" == "arm64" ]]; then
+    npm install -g npm@latest node-gyp pm2
+else
+    npm install -g node-gyp pm2
+fi
 
 echo -e "${GREEN}[5/8] Preparing Project Directory...${NC}"
 INSTALL_DIR="/opt/ajc-pisowifi"
