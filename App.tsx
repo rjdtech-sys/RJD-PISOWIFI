@@ -167,8 +167,6 @@ const App: React.FC = () => {
 
   const handleAddSession = async (session: UserSession) => {
     try {
-      setLoading(true);
-
       const coinSlot = (session as any).coinSlot as string | undefined;
       const coinSlotLockId = (session as any).coinSlotLockId as string | undefined;
       const res = await fetch('/api/sessions/start', {
@@ -188,20 +186,15 @@ const App: React.FC = () => {
         if (data.token) {
           localStorage.setItem('ajc_session_token', data.token);
         }
-        await loadData();
-        // Show connection message to user
+        loadData();
         if (data.message) {
           alert('✅ ' + data.message);
         } else {
           alert('✅ Internet access granted! Connection should activate automatically.');
         }
-        
-        // Try to help the connection by forcing a page reload after a short delay
-        setTimeout(() => {
-          if (window.location.pathname === '/') {
-            window.location.reload();
-          }
-        }, 2000);
+        if (window.location.pathname === '/') {
+          window.location.reload();
+        }
       } else {
         alert('❌ Failed to authorize session: ' + data.error);
       }
@@ -217,7 +210,6 @@ const App: React.FC = () => {
           body: JSON.stringify({ slot: coinSlot, lockId: coinSlotLockId })
         }).catch(() => {});
       }
-      setLoading(false);
     }
   };
 
