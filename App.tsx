@@ -337,26 +337,26 @@ const App: React.FC = () => {
                 )}
               </div>
               
-              <nav className={`admin-sidebar-nav flex-1 ${sidebarOpen ? 'p-3' : 'p-2'} space-y-1 overflow-y-auto scrollbar-hide`}>
-                <SidebarItem disabled={licenseStatus.isRevoked} active={activeTab === AdminTab.Analytics} onClick={() => setActiveTab(AdminTab.Analytics)} icon="📊" label="Dashboard" collapsed={!sidebarOpen} />
-                <SidebarItem disabled={licenseStatus.isRevoked} active={activeTab === AdminTab.Rates} onClick={() => setActiveTab(AdminTab.Rates)} icon="💰" label="Pricing" collapsed={!sidebarOpen} />
-                <SidebarItem disabled={licenseStatus.isRevoked} active={activeTab === AdminTab.Network} onClick={() => setActiveTab(AdminTab.Network)} icon="🌐" label="Network" collapsed={!sidebarOpen} />
-                <SidebarItem disabled={licenseStatus.isRevoked} active={activeTab === AdminTab.Devices} onClick={() => setActiveTab(AdminTab.Devices)} icon="📱" label="Devices" collapsed={!sidebarOpen} />
-                <SidebarItem disabled={licenseStatus.isRevoked} active={activeTab === AdminTab.Hardware} onClick={() => setActiveTab(AdminTab.Hardware)} icon="🔌" label="Hardware" collapsed={!sidebarOpen} />
-                <SidebarItem disabled={licenseStatus.isRevoked} active={activeTab === AdminTab.Themes} onClick={() => setActiveTab(AdminTab.Themes)} icon="🎨" label="Themes" collapsed={!sidebarOpen} />
-                <SidebarItem disabled={licenseStatus.isRevoked} active={activeTab === AdminTab.PortalEditor} onClick={() => setActiveTab(AdminTab.PortalEditor)} icon="🖥️" label="Portal" collapsed={!sidebarOpen} />
-                <SidebarItem disabled={licenseStatus.isRevoked} active={activeTab === AdminTab.PPPoE} onClick={() => setActiveTab(AdminTab.PPPoE)} icon="📞" label="PPPoE" collapsed={!sidebarOpen} />
-                <SidebarItem disabled={licenseStatus.isRevoked} active={activeTab === AdminTab.Bandwidth} onClick={() => setActiveTab(AdminTab.Bandwidth)} icon="📶" label="QoS" collapsed={!sidebarOpen} />
-                <SidebarItem disabled={licenseStatus.isRevoked} active={activeTab === AdminTab.MultiWan} onClick={() => setActiveTab(AdminTab.MultiWan)} icon="🔀" label="Multi-WAN" collapsed={!sidebarOpen} />
-                <SidebarItem disabled={licenseStatus.isRevoked} active={activeTab === AdminTab.Chat} onClick={() => setActiveTab(AdminTab.Chat)} icon="💬" label="Chat" collapsed={!sidebarOpen} />
-                <SidebarItem disabled={licenseStatus.isRevoked} active={activeTab === AdminTab.Machines} onClick={() => setActiveTab(AdminTab.Machines)} icon="🤖" label="Machines" collapsed={!sidebarOpen} />
-                <SidebarItem disabled={licenseStatus.isRevoked} active={activeTab === AdminTab.Vouchers} onClick={() => setActiveTab(AdminTab.Vouchers)} icon="🎟️" label="Vouchers" collapsed={!sidebarOpen} />
-                <SidebarItem disabled={licenseStatus.isRevoked} active={activeTab === AdminTab.Rewards} onClick={() => setActiveTab(AdminTab.Rewards)} icon="🎁" label="Rewards" collapsed={!sidebarOpen} />
-                <SidebarItem disabled={licenseStatus.isRevoked} active={activeTab === AdminTab.SalesInventory} onClick={() => setActiveTab(AdminTab.SalesInventory)} icon="📒" label="Sales Inventory" collapsed={!sidebarOpen} />
-                <SidebarItem disabled={licenseStatus.isRevoked} active={activeTab === AdminTab.Remote} onClick={() => setActiveTab(AdminTab.Remote)} icon="🛰️" label="Remote" collapsed={!sidebarOpen} />
-                <SidebarItem active={activeTab === AdminTab.System} onClick={() => setActiveTab(AdminTab.System)} icon="⚙️" label="System" collapsed={!sidebarOpen} />
-                <SidebarItem disabled={licenseStatus.isRevoked} active={activeTab === AdminTab.Updater} onClick={() => setActiveTab(AdminTab.Updater)} icon="🚀" label="Updater" collapsed={!sidebarOpen} />
-              </nav>
+          <nav className={`admin-sidebar-nav flex-1 ${sidebarOpen ? 'p-3' : 'p-2'} space-y-1 overflow-y-auto scrollbar-hide`}>
+            <SidebarItem disabled={!licenseStatus.canOperate && !licenseStatus.isRevoked} active={activeTab === AdminTab.Analytics} onClick={() => setActiveTab(AdminTab.Analytics)} icon="📊" label="Dashboard" collapsed={!sidebarOpen} />
+            <SidebarItem disabled={!licenseStatus.canOperate && !licenseStatus.isRevoked} active={activeTab === AdminTab.Rates} onClick={() => setActiveTab(AdminTab.Rates)} icon="💰" label="Pricing" collapsed={!sidebarOpen} />
+            <SidebarItem disabled={!licenseStatus.canOperate && !licenseStatus.isRevoked} active={activeTab === AdminTab.Network} onClick={() => setActiveTab(AdminTab.Network)} icon="🌐" label="Network" collapsed={!sidebarOpen} />
+            <SidebarItem disabled={!licenseStatus.canOperate && !licenseStatus.isRevoked} active={activeTab === AdminTab.Devices} onClick={() => setActiveTab(AdminTab.Devices)} icon="📱" label="Devices" collapsed={!sidebarOpen} />
+            <SidebarItem disabled={!licenseStatus.canOperate && !licenseStatus.isRevoked} active={activeTab === AdminTab.Hardware} onClick={() => setActiveTab(AdminTab.Hardware)} icon="🔌" label="Hardware" collapsed={!sidebarOpen} />
+            <SidebarItem disabled={!licenseStatus.canOperate && !licenseStatus.isRevoked} active={activeTab === AdminTab.Themes} onClick={() => setActiveTab(AdminTab.Themes)} icon="🎨" label="Themes" collapsed={!sidebarOpen} />
+            <SidebarItem disabled={!licenseStatus.canOperate && !licenseStatus.isRevoked} active={activeTab === AdminTab.PortalEditor} onClick={() => setActiveTab(AdminTab.PortalEditor)} icon="🖥️" label="Portal" collapsed={!sidebarOpen} />
+            <SidebarItem disabled={!licenseStatus.canOperate && !licenseStatus.isRevoked} active={activeTab === AdminTab.PPPoE} onClick={() => setActiveTab(AdminTab.PPPoE)} icon="📞" label="PPPoE" collapsed={!sidebarOpen} />
+            <SidebarItem disabled={!licenseStatus.canOperate && !licenseStatus.isRevoked} active={activeTab === AdminTab.Bandwidth} onClick={() => setActiveTab(AdminTab.Bandwidth)} icon="📶" label="QoS" collapsed={!sidebarOpen} />
+            <SidebarItem disabled={!licenseStatus.canOperate && !licenseStatus.isRevoked} active={activeTab === AdminTab.MultiWan} onClick={() => setActiveTab(AdminTab.MultiWan)} icon="🔀" label="Multi-WAN" collapsed={!sidebarOpen} />
+            <SidebarItem disabled={!licenseStatus.canOperate && !licenseStatus.isRevoked} active={activeTab === AdminTab.Chat} onClick={() => setActiveTab(AdminTab.Chat)} icon="💬" label="Chat" collapsed={!sidebarOpen} />
+            <SidebarItem disabled={!licenseStatus.canOperate && !licenseStatus.isRevoked} active={activeTab === AdminTab.Machines} onClick={() => setActiveTab(AdminTab.Machines)} icon="🤖" label="Machines" collapsed={!sidebarOpen} />
+            <SidebarItem disabled={!licenseStatus.canOperate && !licenseStatus.isRevoked} active={activeTab === AdminTab.Vouchers} onClick={() => setActiveTab(AdminTab.Vouchers)} icon="🎟️" label="Vouchers" collapsed={!sidebarOpen} />
+            <SidebarItem disabled={!licenseStatus.canOperate && !licenseStatus.isRevoked} active={activeTab === AdminTab.Rewards} onClick={() => setActiveTab(AdminTab.Rewards)} icon="🎁" label="Rewards" collapsed={!sidebarOpen} />
+            <SidebarItem disabled={!licenseStatus.canOperate && !licenseStatus.isRevoked} active={activeTab === AdminTab.SalesInventory} onClick={() => setActiveTab(AdminTab.SalesInventory)} icon="📒" label="Sales Inventory" collapsed={!sidebarOpen} />
+            <SidebarItem disabled={!licenseStatus.canOperate && !licenseStatus.isRevoked} active={activeTab === AdminTab.Remote} onClick={() => setActiveTab(AdminTab.Remote)} icon="🛰️" label="Remote" collapsed={!sidebarOpen} />
+            <SidebarItem active={activeTab === AdminTab.System} onClick={() => setActiveTab(AdminTab.System)} icon="⚙️" label="System" collapsed={!sidebarOpen} />
+            <SidebarItem disabled={!licenseStatus.canOperate && !licenseStatus.isRevoked} active={activeTab === AdminTab.Updater} onClick={() => setActiveTab(AdminTab.Updater)} icon="🚀" label="Updater" collapsed={!sidebarOpen} />
+          </nav>
 
               <div className={`admin-sidebar-footer p-4 border-t border-white/5 bg-black/20 ${sidebarOpen ? 'block' : 'hidden md:block'}`}>
                  <div className="flex flex-col gap-3">
