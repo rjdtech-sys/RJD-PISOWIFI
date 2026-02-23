@@ -503,6 +503,11 @@ export const apiClient = {
     return handleResponse(res);
   },
 
+  async getSalesSessions(): Promise<any[]> {
+    const res = await fetch(`${API_BASE}/sales/sessions`, { headers: getHeaders() });
+    return handleResponse(res);
+  },
+
   async pauseSession(token: string): Promise<{ success: boolean; message: string }> {
     const res = await fetch(`${API_BASE}/sessions/pause`, {
       method: 'POST',

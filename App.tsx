@@ -37,6 +37,7 @@ const App: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [rates, setRates] = useState<Rate[]>([]);
   const [activeSessions, setActiveSessions] = useState<UserSession[]>([]);
+  const [salesSessions, setSalesSessions] = useState<UserSession[]>([]);
   const [devices, setDevices] = useState<WifiDevice[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -61,13 +62,22 @@ const App: React.FC = () => {
         ? apiClient.getWifiDevices().catch(() => [])
         : Promise.resolve([]);
 
-      const [fetchedRates, sessions, fetchedDevices] = await Promise.all([
+      const sessionsPromise = apiClient.getSessions().catch(() => []);
+      const salesSessionsPromise = isAdminRoute
+        ? apiClient.getSalesSessions().catch(() => [])
+        : Promise.resolve([]);
+
+      const [fetchedRates, sessions, salesHistory, fetchedDevices] = await Promise.all([
         apiClient.getRates(),
-        apiClient.getSessions().catch(() => []),
+        sessionsPromise,
+        salesSessionsPromise,
         devicesPromise
       ]);
       setRates(fetchedRates);
       setActiveSessions(sessions);
+      if (isAdminRoute) {
+        setSalesSessions(salesHistory);
+      }
       setDevices(fetchedDevices);
     } catch (err: any) {
       console.error('Backend connection failed:', err);
@@ -410,7 +420,7 @@ const App: React.FC = () => {
               {/* Scrollable Content Area */}
               <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 scroll-smooth">
                 <div className="max-w-7xl mx-auto space-y-6">
-                  {activeTab === AdminTab.Analytics && <Analytics sessions={activeSessions} />}
+                  {activeTab === AdminTab.Analytics && <Analytics sessions={salesSessions.length ? salesSessions : activeSessions} />}
                   {activeTab === AdminTab.Rates && <RatesManager rates={rates} setRates={updateRates} />}
                   {activeTab === AdminTab.Network && <NetworkSettings />}
                   {activeTab === AdminTab.Devices && <DeviceManager sessions={activeSessions} refreshSessions={loadData} refreshDevices={loadData} />}
@@ -423,7 +433,7 @@ const App: React.FC = () => {
                   {activeTab === AdminTab.Chat && <ChatManager />}
                   {activeTab === AdminTab.Machines && <MyMachines />}
                   {activeTab === AdminTab.Vouchers && <VoucherManager />}
-                  {activeTab === AdminTab.SalesInventory && <SalesInventory sessions={activeSessions} />}
+                  {activeTab === AdminTab.SalesInventory && <SalesInventory sessions={salesSessions.length ? salesSessions : activeSessions} />}
                   {activeTab === AdminTab.Remote && <RemoteManager />}
                   {activeTab === AdminTab.Rewards && <RewardsSettings />}
                   {activeTab === AdminTab.System && <SystemSettings />}
@@ -593,27 +603,6 @@ const SalesInventory: React.FC<{ sessions: UserSession[] }> = ({ sessions }) => 
     const upperSearch = searchTerm.trim().toUpperCase();
 
     const rows: any[] = [...enhancedSessions];
-
-    if (coinSlotFilter !== 'all' && coinSlotFilter !== 'main') {
-      const device = nodeMcuDevices.find(
-        (d) => d.macAddress && d.macAddress.toUpperCase() === coinSlotFilter.toUpperCase()
-      );
-      if (device) {
-        const createdAt = new Date(device.lastSeen || new Date().toISOString()).toISOString();
-        rows.push({
-          __createdAt: createdAt,
-          __type: 'coin',
-          __coinSlotKey: device.macAddress,
-          __coinSlotLabel: device.name || device.macAddress,
-          __mac: device.macAddress,
-          __account: '',
-          __customer: device.name || '',
-          __device: 'NodeMCU Coinslot',
-          totalPaid: device.totalRevenue || 0,
-          __source: 'nodemcu',
-        });
-      }
-    }
 
     let result = rows.filter((s: any) => {
       const created = new Date(s.__createdAt);

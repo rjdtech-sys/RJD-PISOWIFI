@@ -2019,7 +2019,16 @@ app.post('/api/credits/use', async (req, res) => {
 app.get('/api/sessions', async (req, res) => {
   try {
     const rows = await db.all(
-      'SELECT mac, ip, remaining_seconds as remainingSeconds, total_paid as totalPaid, connected_at as connectedAt, is_paused as isPaused, token, pausable as isPausable FROM sessions'
+      'SELECT mac, ip, remaining_seconds as remainingSeconds, total_paid as totalPaid, connected_at as connectedAt, is_paused as isPaused, token, pausable as isPausable FROM sessions WHERE remaining_seconds > 0'
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/sales/sessions', requireAdmin, async (req, res) => {
+  try {
+    const rows = await db.all(
+      'SELECT mac, ip, remaining_seconds as remainingSeconds, total_paid as totalPaid, connected_at as connectedAt, is_paused as isPaused, token, pausable as isPausable FROM sessions WHERE total_paid > 0 ORDER BY connected_at DESC'
     );
     res.json(rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -5224,12 +5233,17 @@ app.post('/api/vouchers/activate', async (req, res) => {
 // Start Background Timers
 setInterval(async () => {
   try {
-    const expired = await db.all('SELECT mac, ip FROM sessions WHERE remaining_seconds <= 0');
+    await db.run(
+      'UPDATE sessions SET remaining_seconds = remaining_seconds - 1 WHERE remaining_seconds > 0 AND (is_paused = 0 OR is_paused IS NULL)'
+    );
+
+    const expired = await db.all(
+      'SELECT mac, ip FROM sessions WHERE remaining_seconds <= 0 AND (expired_at IS NULL OR expired_at = 0)'
+    );
     for (const s of expired) {
       await network.blockMAC(s.mac, s.ip);
-      await db.run('DELETE FROM sessions WHERE mac = ?', [s.mac]);
+      await db.run('UPDATE sessions SET expired_at = ? WHERE mac = ?', [Date.now(), s.mac]);
     }
-    await db.run('UPDATE sessions SET remaining_seconds = remaining_seconds - 1 WHERE remaining_seconds > 0 AND (is_paused = 0 OR is_paused IS NULL)');
   } catch (e) { console.error(e); }
 }, 1000);
 
