@@ -1606,24 +1606,59 @@ app.get('/api/whoami', async (req, res) => {
       if (Array.isArray(devices) && devices.length > 0) {
         const nowTs = Date.now();
         const nodeLicenseManager = getNodeMCULicenseManager();
-        const matching = devices.filter(d => d.status === 'accepted' && d.vlanId == vlanId);
         let bestDevice = null;
-        for (const d of matching) {
+
+        // Iterate all accepted devices to find the best match
+        for (const d of devices) {
+          if (d.status !== 'accepted') continue;
+
+          // 1. Check Online Status first to avoid expensive checks on offline devices
           const lastSeenTs = d.lastSeen ? new Date(d.lastSeen).getTime() : 0;
           const isOnline = lastSeenTs && (nowTs - lastSeenTs) < 15000;
           if (!isOnline) continue;
+
+          // 2. Check License
           let license = null;
           try {
             license = await nodeLicenseManager.verifyLicense(d.macAddress);
           } catch (e) {}
-          if (license && license.isValid) {
-            bestDevice = d;
-            break;
+          
+          if (!license || !license.isValid) continue;
+
+          // 3. Check VLAN Match
+          let isMatch = false;
+          
+          // A. Explicit VLAN ID match
+          if (d.vlanId == vlanId) {
+            isMatch = true;
           }
-          if (!bestDevice) {
+          
+          // B. Implicit Network Match (if not already matched)
+          // Check if the device is reachable via the same VLAN interface
+          if (!isMatch && d.ipAddress) {
+             try {
+               const { stdout } = await execPromise(`ip route get ${d.ipAddress}`);
+               // Output: "10.0.22.104 dev br-lan.22 src 10.0.22.1 ..."
+               const match = stdout.match(/dev\s+(\S+)/);
+               if (match && match[1]) {
+                 const iface = match[1];
+                 const vlanMatch = iface.match(/\.([0-9]+)$/);
+                 // If the interface has the same VLAN tag as the client
+                 if (vlanMatch && parseInt(vlanMatch[1], 10) == vlanId) {
+                   isMatch = true;
+                 }
+               }
+             } catch (e) {
+               // Ignore route errors
+             }
+          }
+
+          if (isMatch) {
             bestDevice = d;
+            break; // Found a valid, online, licensed, VLAN-matched device.
           }
         }
+
         if (bestDevice) {
           recommendedNodeMCU = {
             id: bestDevice.id,
