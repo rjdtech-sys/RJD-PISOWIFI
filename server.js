@@ -2910,6 +2910,9 @@ app.post('/api/nodemcu/register', async (req, res) => {
        
        console.log(`[NODEMCU] Device Heartbeat | Name: ${updatedDevices[existingDeviceIndex].name} | IP: ${ipAddress} | Status: ${updatedDevices[existingDeviceIndex].status}`);
 
+       // Sync heartbeat to cloud immediately
+       edgeSync.syncNodeMCUDevice(updatedDevices[existingDeviceIndex]).catch(e => console.error('[NODEMCU] Failed to sync heartbeat:', e));
+
        const licenseStatus = await nodeMCULicenseManager.verifyLicense(macAddress);
        
        return res.json({

@@ -37,7 +37,7 @@
 // Default values
 #define DEFAULT_AP_SSID "AJC-SubVendo-Setup"
 #define DEFAULT_AP_PASSWORD ""
-#define REGISTRATION_INTERVAL 2000 // 2 seconds heartbeat
+#define REGISTRATION_INTERVAL 10000 // 10 seconds heartbeat
 
 // Defaults (physical pin labels: Coin=D6, Relay=D5)
 #define DEFAULT_COIN_GPIO 12
