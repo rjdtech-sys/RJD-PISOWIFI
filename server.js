@@ -1288,7 +1288,7 @@ app.get('/success', (req, res) => {
 
 // CAPTIVE PORTAL DETECTION ENDPOINTS
 app.get('/generate_204', async (req, res) => {
-  const clientIp = req.ip.replace('::ffff:', '');
+  const clientIp = req.ip ? req.ip.replace('::ffff:', '') : '';
   const mac = await getMacFromIp(clientIp);
   
   if (mac) {
@@ -1317,7 +1317,7 @@ app.get('/generate_204', async (req, res) => {
 });
 
 app.get('/hotspot-detect.html', async (req, res) => {
-  const clientIp = req.ip.replace('::ffff:', '');
+  const clientIp = req.ip ? req.ip.replace('::ffff:', '') : '';
   const mac = await getMacFromIp(clientIp);
   
   if (mac) {
@@ -1332,7 +1332,7 @@ app.get('/hotspot-detect.html', async (req, res) => {
 });
 
 app.get('/ncsi.txt', async (req, res) => {
-  const clientIp = req.ip.replace('::ffff:', '');
+  const clientIp = req.ip ? req.ip.replace('::ffff:', '') : '';
   const mac = await getMacFromIp(clientIp);
   
   if (mac) {
@@ -1347,7 +1347,7 @@ app.get('/ncsi.txt', async (req, res) => {
 });
 
 app.get('/connecttest.txt', async (req, res) => {
-  const clientIp = req.ip.replace('::ffff:', '');
+  const clientIp = req.ip ? req.ip.replace('::ffff:', '') : '';
   const mac = await getMacFromIp(clientIp);
   
   if (mac) {
@@ -1362,7 +1362,7 @@ app.get('/connecttest.txt', async (req, res) => {
 });
 
 app.get('/success.txt', async (req, res) => {
-  const clientIp = req.ip.replace('::ffff:', '');
+  const clientIp = req.ip ? req.ip.replace('::ffff:', '') : '';
   const mac = await getMacFromIp(clientIp);
   
   if (mac) {
@@ -1378,7 +1378,7 @@ app.get('/success.txt', async (req, res) => {
 
 // Apple-specific captive portal detection
 app.get('/library/test/success.html', async (req, res) => {
-  const clientIp = req.ip.replace('::ffff:', '');
+  const clientIp = req.ip ? req.ip.replace('::ffff:', '') : '';
   const mac = await getMacFromIp(clientIp);
   
   if (mac) {
@@ -1396,7 +1396,7 @@ app.get('/library/test/success.html', async (req, res) => {
 app.use(async (req, res, next) => {
   const host = req.headers.host || '';
   const url = req.url.toLowerCase();
-  const clientIp = req.ip.replace('::ffff:', '');
+  const clientIp = req.ip ? req.ip.replace('::ffff:', '') : '';
 
   // Check if this is a DNS-based captive portal probe
   if (host === 'captive.apple.com' || host === 'www.msftconnecttest.com' || host === 'connectivitycheck.gstatic.com') {
@@ -1431,7 +1431,7 @@ app.use(async (req, res, next) => {
 app.use(async (req, res, next) => {
   const host = req.headers.host || '';
   const url = req.url.toLowerCase();
-  const clientIp = req.ip.replace('::ffff:', '');
+  const clientIp = req.ip ? req.ip.replace('::ffff:', '') : '';
 
   if (url.startsWith('/api') || url.startsWith('/dist') || url.startsWith('/assets') || url.startsWith('/admin') || host.includes('localhost') || host.includes('127.0.0.1')) {
     return next();
@@ -1501,7 +1501,7 @@ app.use(async (req, res, next) => {
 
 // SESSIONS API
 app.get('/api/whoami', async (req, res) => {
-  const clientIp = req.ip.replace('::ffff:', '');
+  const clientIp = req.ip ? req.ip.replace('::ffff:', '') : '';
   const mac = await getMacFromIp(clientIp);
   
   // Check license status for portal restrictions
@@ -1680,7 +1680,7 @@ app.post('/api/coinslot/reserve', async (req, res) => {
     }
   }
 
-  let clientIp = req.ip.replace('::ffff:', '');
+  let clientIp = req.ip ? req.ip.replace('::ffff:', '') : '';
   if (clientIp === '::1') clientIp = '127.0.0.1';
   let mac = await getMacFromIp(clientIp);
   if (!mac && clientIp === '127.0.0.1') mac = 'DEV-LOCALHOST';
@@ -1718,7 +1718,7 @@ app.post('/api/coinslot/heartbeat', async (req, res) => {
     return res.status(400).json({ success: false, error: 'Invalid request.' });
   }
 
-  let clientIp = req.ip.replace('::ffff:', '');
+  let clientIp = req.ip ? req.ip.replace('::ffff:', '') : '';
   if (clientIp === '::1') clientIp = '127.0.0.1';
   let mac = await getMacFromIp(clientIp);
   if (!mac && clientIp === '127.0.0.1') mac = 'DEV-LOCALHOST';
@@ -1753,7 +1753,7 @@ app.post('/api/coinslot/release', async (req, res) => {
 
 app.post('/api/credits/add', async (req, res) => {
   try {
-    let clientIp = req.ip.replace('::ffff:', '');
+    let clientIp = req.ip ? req.ip.replace('::ffff:', '') : '';
     if (clientIp === '::1') clientIp = '127.0.0.1';
     let mac = await getMacFromIp(clientIp);
     if (!mac && clientIp === '127.0.0.1') mac = 'DEV-LOCALHOST';
@@ -1802,7 +1802,7 @@ app.post('/api/credits/add', async (req, res) => {
 
 app.post('/api/credits/use', async (req, res) => {
   try {
-    let clientIp = req.ip.replace('::ffff:', '');
+    let clientIp = req.ip ? req.ip.replace('::ffff:', '') : '';
     if (clientIp === '::1') clientIp = '127.0.0.1';
     let mac = await getMacFromIp(clientIp);
     if (!mac && clientIp === '127.0.0.1') mac = 'DEV-LOCALHOST';
@@ -2050,7 +2050,7 @@ app.get('/api/sales/sessions', requireAdmin, async (req, res) => {
 
 app.post('/api/sessions/start', async (req, res) => {
   const { minutes, pesos, slot: requestedSlot, lockId } = req.body;
-  let clientIp = req.ip.replace('::ffff:', '');
+  let clientIp = req.ip ? req.ip.replace('::ffff:', '') : '';
   if (clientIp === '::1') clientIp = '127.0.0.1';
   let mac = await getMacFromIp(clientIp);
   if (!mac && clientIp === '127.0.0.1') mac = 'DEV-LOCALHOST';
@@ -2224,7 +2224,7 @@ app.post('/api/sessions/start', async (req, res) => {
 
 app.post('/api/sessions/restore', async (req, res) => {
   let token = req.body.token || getSessionToken(req);
-  const clientIp = req.ip.replace('::ffff:', '');
+  const clientIp = req.ip ? req.ip.replace('::ffff:', '') : '';
   let mac = await getMacFromIp(clientIp);
   if (!mac) {
     for (let i = 0; i < 5 && !mac; i++) {
@@ -2353,7 +2353,7 @@ app.delete('/api/rates/:id', requireAdmin, async (req, res) => {
 // NETWORK REFRESH API - Help devices reconnect after session creation
 app.post('/api/network/refresh', async (req, res) => {
   try {
-    const clientIp = req.ip.replace('::ffff:', '');
+    const clientIp = req.ip ? req.ip.replace('::ffff:', '') : '';
     const mac = await getMacFromIp(clientIp);
     
     if (!mac) {
@@ -5265,7 +5265,7 @@ app.delete('/api/vouchers/:id', requireAdmin, async (req, res) => {
 app.post('/api/vouchers/activate', async (req, res) => {
   try {
     const { code } = req.body;
-    const clientIp = req.ip.replace('::ffff:', '');
+    const clientIp = req.ip ? req.ip.replace('::ffff:', '') : '';
     const mac = await getMacFromIp(clientIp);
     let requestedToken = getSessionToken(req);
     
