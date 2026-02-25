@@ -596,6 +596,74 @@ app.post('/api/license/hardware-id', requireAdmin, async (req, res) => {
   }
 });
 
+// CLOUD UPDATE MANAGEMENT
+app.get('/api/system/updates/pending', requireAdmin, (req, res) => {
+  const pendingUpdatePath = path.join(__dirname, 'data/pending_update.json');
+  
+  if (fs.existsSync(pendingUpdatePath)) {
+    try {
+      const updateData = JSON.parse(fs.readFileSync(pendingUpdatePath, 'utf8'));
+      return res.json({ available: true, update: updateData });
+    } catch (e) {
+      console.error('Error reading pending update file:', e);
+    }
+  }
+  
+  res.json({ available: false });
+});
+
+app.post('/api/system/updates/accept', requireAdmin, async (req, res) => {
+  const pendingUpdatePath = path.join(__dirname, 'data/pending_update.json');
+  
+  if (!fs.existsSync(pendingUpdatePath)) {
+    return res.status(404).json({ error: 'No pending update found' });
+  }
+
+  try {
+    const updateCommand = JSON.parse(fs.readFileSync(pendingUpdatePath, 'utf8'));
+    
+    // Trigger the update process in background
+    // We import edgeSync instance and call performSystemUpdate
+    // Note: performSystemUpdate is async, but we might want to return immediately
+    // or wait a bit to ensure it started.
+    
+    console.log('[System] User accepted update:', updateCommand.id);
+    
+    // Delete the pending file so it doesn't show up again
+    fs.unlinkSync(pendingUpdatePath);
+    
+    // Execute update
+    edgeSync.performSystemUpdate(updateCommand).catch(err => {
+        console.error('[System] Update execution failed:', err);
+    });
+    
+    res.json({ success: true, message: 'Update process started. The system will reboot when finished.' });
+    
+  } catch (e) {
+    console.error('Error accepting update:', e);
+    res.status(500).json({ error: 'Failed to start update: ' + e.message });
+  }
+});
+
+app.post('/api/system/updates/reject', requireAdmin, async (req, res) => {
+    const pendingUpdatePath = path.join(__dirname, 'data/pending_update.json');
+    
+    if (fs.existsSync(pendingUpdatePath)) {
+        try {
+            const updateCommand = JSON.parse(fs.readFileSync(pendingUpdatePath, 'utf8'));
+            // Update status to rejected
+             await edgeSync.updateCommandStatus(updateCommand.id, 'rejected', 'User rejected the update from local dashboard.');
+             
+             fs.unlinkSync(pendingUpdatePath);
+             res.json({ success: true });
+        } catch(e) {
+            res.status(500).json({ error: e.message });
+        }
+    } else {
+        res.json({ success: true }); // Already gone
+    }
+});
+
 // NodeMCU License Management APIs
 const { initializeNodeMCULicenseManager } = require('./lib/nodemcu-license');
 const nodeMCULicenseManager = initializeNodeMCULicenseManager();

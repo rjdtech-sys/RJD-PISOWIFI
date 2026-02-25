@@ -12,6 +12,8 @@ const SystemSettings: React.FC = () => {
     cpu: 'Loading...',
     disk: 'Loading...'
   });
+  const [pendingUpdate, setPendingUpdate] = useState<any>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -26,6 +28,18 @@ const SystemSettings: React.FC = () => {
       } catch (e) {
         console.error('Failed to fetch system stats', e);
       }
+
+      // Check for pending updates
+      try {
+          const updateData = await apiClient.getPendingUpdate();
+          if (updateData && updateData.available) {
+              setPendingUpdate(updateData.update);
+          } else {
+              setPendingUpdate(null);
+          }
+      } catch (e) {
+          console.error('Failed to fetch pending updates', e);
+      }
     };
 
     fetchStats();
@@ -36,6 +50,32 @@ const SystemSettings: React.FC = () => {
       clearInterval(interval);
     };
   }, []);
+
+  const handleAcceptUpdate = async () => {
+      if (!confirm('Are you sure you want to install this update? The system will reboot.')) return;
+      
+      setIsUpdating(true);
+      try {
+          await apiClient.acceptUpdate();
+          alert('Update started! System will reboot shortly.');
+          setPendingUpdate(null);
+      } catch (e: any) {
+          alert('Failed to start update: ' + e.message);
+      } finally {
+          setIsUpdating(false);
+      }
+  };
+
+  const handleRejectUpdate = async () => {
+      if (!confirm('Reject this update?')) return;
+      
+      try {
+          await apiClient.rejectUpdate();
+          setPendingUpdate(null);
+      } catch (e: any) {
+          alert('Failed to reject update: ' + e.message);
+      }
+  };
 
   const handleReset = async () => {
     if (confirmText !== 'FACTORY RESET') return;
@@ -138,6 +178,41 @@ const SystemSettings: React.FC = () => {
 
   return (
     <div className="max-w-4xl mx-auto space-y-4 pb-10">
+      {/* Pending Update Banner */}
+      {pendingUpdate && (
+        <section className="bg-indigo-600 rounded-xl border border-indigo-500 shadow-lg shadow-indigo-500/20 overflow-hidden text-white animate-pulse-slow">
+            <div className="p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center text-xl backdrop-blur-sm">
+                        🚀
+                    </div>
+                    <div>
+                        <h3 className="text-sm font-black uppercase tracking-widest">Update Available</h3>
+                        <p className="text-[10px] font-medium opacity-90">
+                            Version: <span className="font-mono bg-black/20 px-1 rounded">{pendingUpdate.payload?.version || 'Latest'}</span> • 
+                            File: <span className="font-mono opacity-80">{pendingUpdate.payload?.file_name || 'System Update'}</span>
+                        </p>
+                    </div>
+                </div>
+                <div className="flex gap-2 w-full sm:w-auto">
+                    <button 
+                        onClick={handleRejectUpdate}
+                        className="flex-1 sm:flex-none px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 font-bold text-[10px] uppercase transition-colors"
+                    >
+                        Dismiss
+                    </button>
+                    <button 
+                        onClick={handleAcceptUpdate}
+                        disabled={isUpdating}
+                        className="flex-1 sm:flex-none px-6 py-2 rounded-lg bg-white text-indigo-600 font-black text-[10px] uppercase shadow-lg hover:bg-indigo-50 transition-all active:scale-95 disabled:opacity-70"
+                    >
+                        {isUpdating ? 'Starting...' : 'Install Update'}
+                    </button>
+                </div>
+            </div>
+        </section>
+      )}
+
       {/* System Diagnostics Card */}
       <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden transition-all">
         <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">

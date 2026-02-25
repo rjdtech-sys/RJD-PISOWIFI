@@ -409,6 +409,38 @@ export const apiClient = {
     return handleResponse(res);
   },
 
+  async getPendingUpdate(): Promise<any> {
+    const res = await fetch(`${API_BASE}/system/updates/pending`, { headers: getHeaders() });
+    return handleResponse(res);
+  },
+
+  async acceptUpdate(): Promise<void> {
+    const res = await fetch(`${API_BASE}/system/updates/accept`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({})
+    });
+    await handleResponse(res);
+  },
+
+  async rejectUpdate(): Promise<void> {
+    const res = await fetch(`${API_BASE}/system/updates/reject`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({})
+    });
+    await handleResponse(res);
+  },
+
+  async restartSystem(type: 'soft' | 'hard' = 'soft'): Promise<void> {
+    const res = await fetch(`${API_BASE}/system/restart`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ type })
+    });
+    await handleResponse(res);
+  },
+
   async getSystemInfo(): Promise<any> {
     const res = await fetch(`${API_BASE}/system/info`, { headers: getHeaders() });
     return handleResponse(res);
