@@ -32,7 +32,21 @@ const App: React.FC = () => {
 
   const [isAdmin, setIsAdmin] = useState(isCurrentlyAdminPath());
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [activeTab, setActiveTab] = useState<AdminTab>(AdminTab.Analytics);
+  
+  // Initialize activeTab from localStorage to persist state across refreshes
+  const [activeTab, setActiveTab] = useState<AdminTab>(() => {
+    const savedTab = localStorage.getItem('ajc_admin_last_tab');
+    if (savedTab && Object.values(AdminTab).includes(savedTab as AdminTab)) {
+      return savedTab as AdminTab;
+    }
+    return AdminTab.Analytics;
+  });
+
+  // Save activeTab to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('ajc_admin_last_tab', activeTab);
+  }, [activeTab]);
+
   const [licenseStatus, setLicenseStatus] = useState<{ isLicensed: boolean, isRevoked: boolean, canOperate: boolean }>({ isLicensed: true, isRevoked: false, canOperate: true });
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [rates, setRates] = useState<Rate[]>([]);
