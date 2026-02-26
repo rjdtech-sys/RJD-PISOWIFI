@@ -947,5 +947,14 @@ export const apiClient = {
       body: JSON.stringify({ themes })
     });
     await handleResponse(res);
+  },
+
+  async saveMainCoinsOut(data: { gross: number; net: number; date?: string }): Promise<any> {
+    const res = await fetch(`${API_BASE}/admin/coinsout`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(data)
+    });
+    return handleResponse(res);
   }
 };

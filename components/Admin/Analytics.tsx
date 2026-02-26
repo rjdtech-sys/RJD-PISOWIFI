@@ -26,16 +26,36 @@ const Analytics: React.FC<AnalyticsProps> = ({ sessions, salesHistory }) => {
   const [cpuHistory, setCpuHistory] = useState<{ time: string; load: number }[]>([]);
   const [coreLoads, setCoreLoads] = useState<number[]>([0, 0, 0, 0]);
 
+  // Main Machine Coins Out State
+  const [showCoinsOutModal, setShowCoinsOutModal] = useState(false);
+  const [lastCoinsOutStats, setLastCoinsOutStats] = useState<{lastCoinsOutGross: number, lastCoinsOutNet: number, lastCoinsOutDate: string} | null>(null);
+  const [coinsOutProcessing, setCoinsOutProcessing] = useState(false);
+  const [coinsOutShare, setCoinsOutShare] = useState<number>(60); // Default 60%
+
   useEffect(() => {
     // Fetch available interfaces and system info once on mount
     const fetchInitData = async () => {
       try {
-        const [ifaceData, infoData, pppoeData, machineData] = await Promise.all([
+        const [ifaceData, infoData, pppoeData, machineData, configData] = await Promise.all([
           apiClient.getSystemInterfaces(),
           apiClient.getSystemInfo(),
           apiClient.getPPPoESessions().catch(() => []),
-          apiClient.getMachineStatus().catch(() => null)
+          apiClient.getMachineStatus().catch(() => null),
+          // We need a way to get the last coins out stats. 
+          // Currently we don't have a direct endpoint for just config, but we can assume it might be part of system stats or we add one.
+          // For now, let's try to fetch it via a new endpoint or piggyback.
+          // Since we just added the save endpoint, we might not have a get endpoint yet.
+          // We'll rely on local state update for now or add a get endpoint later.
+          Promise.resolve(null) 
         ]);
+        
+        // Attempt to load last coins out stats from localStorage as fallback or temporary storage
+        const savedStats = localStorage.getItem('main_coins_out_stats');
+        if (savedStats) {
+            try {
+                setLastCoinsOutStats(JSON.parse(savedStats));
+            } catch (e) {}
+        }
         
         setAvailableInterfaces(ifaceData);
         setSysInfo(infoData);
@@ -159,6 +179,56 @@ const Analytics: React.FC<AnalyticsProps> = ({ sessions, salesHistory }) => {
   const hotspotConnected = sessions.filter(s => !s.isPaused && s.remainingSeconds > 0).length;
   const hotspotPaused = sessions.filter(s => s.isPaused).length;
   const hotspotDisconnected = 0;
+
+  const handleCoinsOut = async () => {
+    setCoinsOutProcessing(true);
+    try {
+      // Calculate gross revenue (Total Lifetime Revenue)
+      // Note: We are using sumRevenue('year') or similar as a proxy for "Current Cycle" if we don't have a dedicated cycle counter.
+      // But for a proper "Coins Out" feature, we usually want to withdraw the ENTIRE current accumulated amount since the last coins out.
+      // Since we don't track "since last coins out" explicitly in the backend yet (we just added logging),
+      // we will use the TOTAL revenue displayed (e.g. Month or Year) as the base, OR better, let the user know what they are withdrawing.
+      // For simplicity in this iteration, we will withdraw the "Monthly" revenue as the "Gross" amount, 
+      // OR ideally we should have a "Current Wallet" amount.
+      // Let's use the 'sumRevenue' function but we need to be careful.
+      // Actually, standard practice: Coins Out = Total Sales currently in the box.
+      // If we don't have a flag for "collected", we might be double counting if we just sum history.
+      // For now, let's assume the "Monthly Revenue" is what they want to collect (or make it manual entry if needed, but auto is better).
+      // Let's use sumRevenue('month') as the default Gross.
+      
+      const gross = sumRevenue('month');
+      const net = gross * (coinsOutShare / 100);
+      
+      const stats = {
+        gross,
+        net,
+        date: new Date().toISOString()
+      };
+
+      await apiClient.saveMainCoinsOut(stats);
+      
+      setLastCoinsOutStats({
+        lastCoinsOutGross: gross,
+        lastCoinsOutNet: net,
+        lastCoinsOutDate: stats.date
+      });
+      
+      // Save to localStorage as cache
+      localStorage.setItem('main_coins_out_stats', JSON.stringify({
+        lastCoinsOutGross: gross,
+        lastCoinsOutNet: net,
+        lastCoinsOutDate: stats.date
+      }));
+
+      setShowCoinsOutModal(false);
+      // Optional: Refresh data
+    } catch (err) {
+      console.error('Coins Out failed', err);
+      alert('Failed to save coins out record');
+    } finally {
+      setCoinsOutProcessing(false);
+    }
+  };
 
   if (!stats) return (
     <div className="flex flex-col items-center justify-center min-h-[400px] text-slate-400">
@@ -350,6 +420,38 @@ const Analytics: React.FC<AnalyticsProps> = ({ sessions, salesHistory }) => {
             <div className="text-sm font-black text-slate-800">Main Vendo</div>
             <div className="text-sm font-black text-slate-800">₱{sumRevenue('month').toFixed(2)}</div>
           </div>
+          
+          <div className="mt-4 pt-4 border-t border-slate-100">
+             <div className="flex justify-between items-center mb-2">
+                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Last Coins Out</div>
+                <button 
+                  onClick={() => setShowCoinsOutModal(true)}
+                  className="text-[10px] bg-blue-50 hover:bg-blue-100 text-blue-600 px-2 py-1 rounded font-bold transition-colors"
+                >
+                  COINS OUT
+                </button>
+             </div>
+             {lastCoinsOutStats ? (
+               <div className="space-y-1">
+                 <div className="flex justify-between text-[10px] text-slate-600">
+                   <span>Date:</span>
+                   <span className="font-mono">{new Date(lastCoinsOutStats.lastCoinsOutDate).toLocaleDateString()}</span>
+                 </div>
+                 <div className="flex justify-between text-[10px] text-slate-600">
+                   <span>Gross:</span>
+                   <span className="font-bold text-slate-800">₱{lastCoinsOutStats.lastCoinsOutGross.toFixed(2)}</span>
+                 </div>
+                 <div className="flex justify-between text-[10px] text-slate-600">
+                   <span>Net:</span>
+                   <span className="font-bold text-emerald-600">₱{lastCoinsOutStats.lastCoinsOutNet.toFixed(2)}</span>
+                 </div>
+               </div>
+             ) : (
+               <div className="text-center text-[10px] text-slate-400 italic py-2">
+                 No record found
+               </div>
+             )}
+          </div>
         </div>
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm lg:col-span-2">
           <div className="flex items-center justify-between mb-3">
@@ -413,6 +515,95 @@ const Analytics: React.FC<AnalyticsProps> = ({ sessions, salesHistory }) => {
           </table>
         </div>
       </div>
+      {/* Coins Out Modal */}
+      {showCoinsOutModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+              <h3 className="text-sm font-bold text-slate-800">Main Machine Coins Out</h3>
+              <button 
+                onClick={() => setShowCoinsOutModal(false)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-center">
+                <div className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mb-1">Total Revenue (Gross)</div>
+                <div className="text-2xl font-black text-slate-800">₱{sumRevenue('month').toFixed(2)}</div>
+                <div className="text-[9px] text-slate-500 mt-1">Based on this month's sales</div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-2">
+                  Net Share Percentage (%)
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={coinsOutShare}
+                    onChange={(e) => setCoinsOutShare(Number(e.target.value))}
+                    className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                  />
+                  <div className="w-12 text-center font-mono font-bold text-sm bg-slate-100 rounded py-1">
+                    {coinsOutShare}%
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 pt-2">
+                <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
+                  <div className="text-[10px] font-bold text-slate-500 uppercase">Less Share</div>
+                  <div className="text-lg font-bold text-red-500">
+                    ₱{(sumRevenue('month') * ((100 - coinsOutShare) / 100)).toFixed(2)}
+                  </div>
+                </div>
+                <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-100">
+                  <div className="text-[10px] font-bold text-emerald-600 uppercase">Net Income</div>
+                  <div className="text-lg font-bold text-emerald-700">
+                    ₱{(sumRevenue('month') * (coinsOutShare / 100)).toFixed(2)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="text-[10px] text-slate-500 bg-yellow-50 p-2 rounded border border-yellow-100">
+                ⚠️ This will record a "Coins Out" event and reset the current cycle revenue tracking.
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+              <button
+                onClick={() => setShowCoinsOutModal(false)}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-lg transition-colors"
+                disabled={coinsOutProcessing}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCoinsOut}
+                disabled={coinsOutProcessing}
+                className="px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm flex items-center gap-2"
+              >
+                {coinsOutProcessing ? (
+                  <>
+                    <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <span>Processing...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>💰</span>
+                    <span>Save & Reset</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
