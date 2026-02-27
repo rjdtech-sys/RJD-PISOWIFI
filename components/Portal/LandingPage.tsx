@@ -786,7 +786,7 @@ const LandingPage: React.FC<Props> = ({ rates, sessions, onSessionStart, refresh
 
       <footer className="mt-12 text-center pb-10 flex flex-col items-center gap-4">
         <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 opacity-50">
-          Powered by AJC PisoWifi System
+          Powered by {config.title || 'PisoWifi System'}
         </p>
       </footer>
 

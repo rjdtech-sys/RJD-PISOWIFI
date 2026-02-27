@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { apiClient } from '../../lib/api';
 
 interface LoginProps {
   onLoginSuccess: (token: string) => void;
@@ -10,6 +11,22 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onBack }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [companySettings, setCompanySettings] = useState<{ companyName: string, companyLogo: string | null }>({
+    companyName: 'AJC PISOWIFI',
+    companyLogo: null
+  });
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const settings = await apiClient.getCompanySettings();
+        setCompanySettings(settings);
+      } catch (e) {
+        // Ignore error, use defaults
+      }
+    };
+    fetchSettings();
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,11 +58,17 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onBack }) => {
     <div className="min-h-screen bg-[#0f172a] flex items-center justify-center p-4">
       <div className="max-w-sm w-full bg-white p-6 rounded-2xl shadow-2xl border border-slate-200">
         <div className="text-center mb-6">
-          <div className="w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-4 shadow-lg admin-btn-primary">
-             <span className="text-xl">🔒</span>
+          <div className="w-16 h-16 rounded-xl flex items-center justify-center mx-auto mb-4 shadow-lg overflow-hidden bg-slate-50 border border-slate-100">
+             {companySettings.companyLogo ? (
+               <img src={companySettings.companyLogo} className="w-full h-full object-contain p-2" alt="Logo" />
+             ) : (
+               <span className="text-2xl font-black text-blue-600">
+                 {companySettings.companyName.substring(0, 3).toUpperCase()}
+               </span>
+             )}
           </div>
-          <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Admin Control</h2>
-          <p className="text-slate-400 text-[9px] font-bold uppercase tracking-tighter mt-1">Authorized Access Only</p>
+          <h2 className="text-lg font-black text-slate-900 uppercase tracking-tight">{companySettings.companyName}</h2>
+          <p className="text-slate-400 text-[9px] font-bold uppercase tracking-tighter mt-1">Admin Control Panel</p>
         </div>
 
         {error && (
