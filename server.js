@@ -5449,29 +5449,35 @@ app.post('/api/system/sync', requireAdmin, async (req, res) => {
   try {
     console.log('[System] Syncing filesystem...');
     
-    // SYNC WLAN0 CONFIG BACK TO DB (As requested by user)
+    // SYNC HOSTAPD CONFIGS BACK TO DB
     // This ensures manual file edits are saved to SQLite
-    const wlanConfigPath = '/etc/hostapd/hostapd_wlan0.conf';
-    if (fs.existsSync(wlanConfigPath)) {
-        try {
-            const content = fs.readFileSync(wlanConfigPath, 'utf8');
-            const ssidMatch = content.match(/^ssid=(.+)$/m);
-            const passMatch = content.match(/^wpa_passphrase=(.+)$/m);
-            
-            if (ssidMatch) {
-                const ssid = ssidMatch[1].trim();
-                const pass = passMatch ? passMatch[1].trim() : '';
-                
-                const bridgeMatch = content.match(/^bridge=(.+)$/m);
-                const bridge = bridgeMatch ? bridgeMatch[1].trim() : 'br0';
-                
-                console.log(`[System] Syncing wlan0 config to DB: SSID=${ssid}`);
-                await db.run('INSERT OR REPLACE INTO wireless_settings (interface, ssid, password, bridge) VALUES (?, ?, ?, ?)', 
-                  ['wlan0', ssid, pass, bridge]);
+    try {
+        const files = fs.readdirSync('/etc/hostapd');
+        for (const file of files) {
+            if (file.startsWith('hostapd_') && file.endsWith('.conf')) {
+                const ifaceMatch = file.match(/^hostapd_(.+)\.conf$/);
+                if (ifaceMatch) {
+                    const iface = ifaceMatch[1];
+                    const content = fs.readFileSync(`/etc/hostapd/${file}`, 'utf8');
+                    const ssidMatch = content.match(/^ssid=(.+)$/m);
+                    const passMatch = content.match(/^wpa_passphrase=(.+)$/m);
+                    
+                    if (ssidMatch) {
+                        const ssid = ssidMatch[1].trim();
+                        const pass = passMatch ? passMatch[1].trim() : '';
+                        
+                        const bridgeMatch = content.match(/^bridge=(.+)$/m);
+                        const bridge = bridgeMatch ? bridgeMatch[1].trim() : 'br0';
+                        
+                        console.log(`[System] Syncing ${iface} config to DB: SSID=${ssid}`);
+                        await db.run('INSERT OR REPLACE INTO wireless_settings (interface, ssid, password, bridge) VALUES (?, ?, ?, ?)', 
+                          [iface, ssid, pass, bridge]);
+                    }
+                }
             }
-        } catch (e) {
-            console.error('[System] Failed to sync wlan0 config:', e.message);
         }
+    } catch (e) {
+        console.error('[System] Failed to sync hostapd configs:', e.message);
     }
 
     await execPromise('sync');

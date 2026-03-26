@@ -263,7 +263,7 @@ const NetworkSettings: React.FC = () => {
   const isPotentialWifi = (iface: NetworkInterface) => {
     const name = (iface.name || '').toLowerCase();
     const type = (iface.type || '').toLowerCase();
-    return type === 'wifi' || name.startsWith('wlan') || name.startsWith('ap') || name.startsWith('ra');
+    return type === 'wifi' || name.startsWith('wl') || name.startsWith('ap') || name.startsWith('ra');
   };
 
   return (
