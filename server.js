@@ -1446,28 +1446,47 @@ app.get('/success', (req, res) => {
 });
 
 // CAPTIVE PORTAL DETECTION ENDPOINTS
+async function tryRoamingRestoreForClient(req, clientIp, mac) {
+  try {
+    if (!mac) return false;
+    const local = await db.get('SELECT remaining_seconds FROM sessions WHERE mac = ? AND remaining_seconds > 0 AND (is_paused = 0 OR is_paused IS NULL)', [mac]);
+    if (local) return true;
+
+    if (!edgeSync || !edgeSync.vendorId) return false;
+
+    try {
+      if (typeof edgeSync.checkRoamingForMac === 'function') {
+        await edgeSync.checkRoamingForMac(mac);
+      }
+    } catch (e) {}
+
+    const token = getSessionToken(req);
+    if (token && typeof edgeSync.checkRoamingForToken === 'function') {
+      try {
+        await edgeSync.checkRoamingForToken(token, mac);
+      } catch (e) {}
+    }
+
+    const after = await db.get('SELECT remaining_seconds FROM sessions WHERE mac = ? AND remaining_seconds > 0 AND (is_paused = 0 OR is_paused IS NULL)', [mac]);
+    if (after) {
+      try {
+        await db.run('UPDATE sessions SET ip = ? WHERE mac = ?', [clientIp, mac]);
+        await network.whitelistMAC(mac, clientIp);
+      } catch (e) {}
+      return true;
+    }
+  } catch (e) {}
+  return false;
+}
+
 app.get('/generate_204', async (req, res) => {
   const clientIp = req.ip ? req.ip.replace('::ffff:', '') : '';
   const mac = await getMacFromIp(clientIp);
   
   if (mac) {
-    const session = await db.get('SELECT mac FROM sessions WHERE mac = ? AND remaining_seconds > 0 AND (is_paused = 0 OR is_paused IS NULL)', [mac]);
-    if (session) {
+    const ok = await tryRoamingRestoreForClient(req, clientIp, mac);
+    if (ok) {
       return res.status(204).send();
-    }
-    
-    // Roaming Check: If no local session, try to pull from cloud via EdgeSync
-    // This allows seamless roaming when user moves between APs
-    try {
-        if (edgeSync && edgeSync.vendorId) {
-             // We do this check only if we are "online" and configured
-             const roamingSession = await edgeSync.checkRoamingForMac(mac);
-             if (roamingSession) {
-                 return res.status(204).send();
-             }
-        }
-    } catch(e) {
-        // Fallback to captive portal if roaming check fails
     }
   }
   
@@ -1480,8 +1499,8 @@ app.get('/hotspot-detect.html', async (req, res) => {
   const mac = await getMacFromIp(clientIp);
   
   if (mac) {
-    const session = await db.get('SELECT mac FROM sessions WHERE mac = ? AND remaining_seconds > 0 AND (is_paused = 0 OR is_paused IS NULL)', [mac]);
-    if (session) {
+    const ok = await tryRoamingRestoreForClient(req, clientIp, mac);
+    if (ok) {
       return res.type('text/plain').send('Success');
     }
   }
@@ -1495,8 +1514,8 @@ app.get('/ncsi.txt', async (req, res) => {
   const mac = await getMacFromIp(clientIp);
   
   if (mac) {
-    const session = await db.get('SELECT mac FROM sessions WHERE mac = ? AND remaining_seconds > 0 AND (is_paused = 0 OR is_paused IS NULL)', [mac]);
-    if (session) {
+    const ok = await tryRoamingRestoreForClient(req, clientIp, mac);
+    if (ok) {
       return res.type('text/plain').send('Microsoft NCSI');
     }
   }
@@ -1510,8 +1529,8 @@ app.get('/connecttest.txt', async (req, res) => {
   const mac = await getMacFromIp(clientIp);
   
   if (mac) {
-    const session = await db.get('SELECT mac FROM sessions WHERE mac = ? AND remaining_seconds > 0 AND (is_paused = 0 OR is_paused IS NULL)', [mac]);
-    if (session) {
+    const ok = await tryRoamingRestoreForClient(req, clientIp, mac);
+    if (ok) {
       return res.type('text/plain').send('Success');
     }
   }
@@ -1525,8 +1544,8 @@ app.get('/success.txt', async (req, res) => {
   const mac = await getMacFromIp(clientIp);
   
   if (mac) {
-    const session = await db.get('SELECT mac FROM sessions WHERE mac = ? AND remaining_seconds > 0 AND (is_paused = 0 OR is_paused IS NULL)', [mac]);
-    if (session) {
+    const ok = await tryRoamingRestoreForClient(req, clientIp, mac);
+    if (ok) {
       return res.type('text/plain').send('Success');
     }
   }
@@ -1541,8 +1560,8 @@ app.get('/library/test/success.html', async (req, res) => {
   const mac = await getMacFromIp(clientIp);
   
   if (mac) {
-    const session = await db.get('SELECT mac FROM sessions WHERE mac = ? AND remaining_seconds > 0 AND (is_paused = 0 OR is_paused IS NULL)', [mac]);
-    if (session) {
+    const ok = await tryRoamingRestoreForClient(req, clientIp, mac);
+    if (ok) {
       return res.type('text/plain').send('Success');
     }
   }
