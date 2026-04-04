@@ -75,6 +75,7 @@ apt-get install -y \
     psmisc \
     python3 \
     python3-dev \
+    python3-venv \
     python-is-python3 \
     python3-pip \
     sqlite3 \
@@ -92,7 +93,17 @@ case $BOARD in
 esac
 
 echo -e "${GREEN}Installing esptool...${NC}"
-pip3 install --break-system-packages --upgrade esptool || pip3 install --upgrade esptool
+if apt-get install -y esptool; then
+    echo -e "${BLUE}esptool installed via apt.${NC}"
+elif apt-get install -y python3-esptool; then
+    echo -e "${BLUE}python3-esptool installed via apt.${NC}"
+else
+    ESPTOOL_VENV="/opt/ajc-esptool-venv"
+    python3 -m venv "$ESPTOOL_VENV"
+    "$ESPTOOL_VENV/bin/python" -m pip install --no-input esptool
+    ln -sf "$ESPTOOL_VENV/bin/esptool" /usr/local/bin/esptool
+    echo -e "${BLUE}esptool installed in venv and linked to /usr/local/bin/esptool.${NC}"
+fi
 
 echo -e "${GREEN}[4/8] Installing Node.js v20 (LTS)...${NC}"
 DEB_ARCH=$(dpkg --print-architecture 2>/dev/null || echo "")
