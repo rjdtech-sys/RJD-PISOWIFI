@@ -1,5 +1,5 @@
 
-import { Rate, NetworkInterface, SystemConfig, WanConfig, VlanConfig, WifiDevice, DeviceSession, PPPoEServerConfig, PPPoEUser, PPPoESession, QoSConfig, PPPoEProfile, PPPoEBillingProfile, PPPoEPool } from '../types';
+import { Rate, NetworkInterface, SystemConfig, WanConfig, VlanConfig, WifiDevice, DeviceSession, PPPoEServerConfig, PPPoEUser, PPPoESession, QoSConfig, PPPoEProfile, PPPoEBillingProfile, PPPoEPool, PPPoESale } from '../types';
 
 const API_BASE = '/api';
 
@@ -736,6 +736,20 @@ export const apiClient = {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({ pool_id: pool_id ?? null, redirect_ip: redirect_ip ?? '' })
+    });
+    return handleResponse(res);
+  },
+
+  async getPPPoESales(): Promise<PPPoESale[]> {
+    const res = await fetch(`${API_BASE}/network/pppoe/sales`, { headers: getHeaders() });
+    return handleResponse(res);
+  },
+
+  async createPPPoESale(payload: { user_id: number; billing_profile_id?: number; payment_method?: string; notes?: string }): Promise<{ success: boolean; id?: number }> {
+    const res = await fetch(`${API_BASE}/network/pppoe/sales`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(payload)
     });
     return handleResponse(res);
   },

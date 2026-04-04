@@ -4839,6 +4839,59 @@ app.post('/api/network/pppoe/users', requireAdmin, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+app.get('/api/network/pppoe/sales', requireAdmin, async (req, res) => {
+  try {
+    const rows = await db.all('SELECT * FROM pppoe_sales ORDER BY paid_at DESC');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/network/pppoe/sales', requireAdmin, async (req, res) => {
+  try {
+    const { user_id, billing_profile_id, payment_method, notes } = req.body || {};
+    const userId = user_id ? parseInt(String(user_id), 10) : null;
+    if (!userId || Number.isNaN(userId)) return res.status(400).json({ error: 'Invalid user_id' });
+
+    const user = await db.get('SELECT id, username, account_number, billing_profile_id FROM pppoe_users WHERE id = ?', [userId]);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const bpId = billing_profile_id ? parseInt(String(billing_profile_id), 10) : (user.billing_profile_id ? parseInt(String(user.billing_profile_id), 10) : null);
+    if (!bpId || Number.isNaN(bpId)) return res.status(400).json({ error: 'User has no billing profile' });
+
+    const billing = await db.get(
+      `SELECT bp.id as billing_profile_id, bp.name as billing_profile_name, bp.price as price, p.name as profile_name
+       FROM pppoe_billing_profiles bp
+       JOIN pppoe_profiles p ON p.id = bp.profile_id
+       WHERE bp.id = ?`,
+      [bpId]
+    );
+    if (!billing) return res.status(404).json({ error: 'Billing profile not found' });
+
+    const amount = Number(billing.price || 0);
+    const method = payment_method ? String(payment_method).trim() : 'cash';
+    const noteText = notes ? String(notes).trim() : null;
+
+    const result = await db.run(
+      `INSERT INTO pppoe_sales
+        (user_id, account_number, username, billing_profile_id, billing_profile_name, profile_name, amount, currency, payment_method, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'PHP', ?, ?)`,
+      [
+        user.id,
+        user.account_number || null,
+        user.username,
+        billing.billing_profile_id,
+        billing.billing_profile_name,
+        billing.profile_name,
+        amount,
+        method,
+        noteText
+      ]
+    );
+
+    res.json({ success: true, id: result.lastID });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // PPPoE Profiles API
 app.get('/api/network/pppoe/profiles', requireAdmin, async (req, res) => {
   try { res.json(await db.all('SELECT * FROM pppoe_profiles ORDER BY created_at DESC')); } 

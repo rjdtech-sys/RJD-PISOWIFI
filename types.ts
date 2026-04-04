@@ -154,6 +154,21 @@ export interface PPPoEInvoice {
   generated_at?: string;
 }
 
+export interface PPPoESale {
+  id?: number;
+  user_id: number;
+  account_number?: string | null;
+  username: string;
+  billing_profile_id?: number | null;
+  billing_profile_name?: string | null;
+  profile_name?: string | null;
+  amount: number;
+  currency?: string;
+  paid_at?: string;
+  payment_method?: string;
+  notes?: string | null;
+}
+
 export interface PPPoEProfile {
   id?: number;
   name: string;
