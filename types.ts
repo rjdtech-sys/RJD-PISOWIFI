@@ -127,7 +127,28 @@ export interface PPPoEUser {
   enabled: number;
   ip_address?: string;
   billing_profile_id?: number;
+  expires_at?: string | null;
+  expired_at?: string | null;
+  last_billed_at?: string | null;
   created_at?: string;
+}
+
+export interface PPPoEInvoice {
+  id?: number;
+  invoice_no: string;
+  user_id: number;
+  account_number?: string | null;
+  username: string;
+  billing_profile_id?: number | null;
+  billing_profile_name?: string | null;
+  profile_name?: string | null;
+  amount: number;
+  currency?: string;
+  period_start?: string | null;
+  period_end?: string | null;
+  expires_at?: string | null;
+  pdf_path?: string | null;
+  generated_at?: string;
 }
 
 export interface PPPoEProfile {
@@ -418,4 +439,3 @@ export interface VoucherActivationResponse {
   message: string;
   error?: string;
 }
-

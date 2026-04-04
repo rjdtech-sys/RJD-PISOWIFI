@@ -16,6 +16,9 @@ const multer = require('multer');
 const edgeSync = require('./lib/edge-sync');
 const settings = require('./lib/settings');
 const AdmZip = require('adm-zip');
+const { generatePPPoEInvoicePdf } = require('./lib/pppoe-billing');
+
+const PPPoE_BILLING_DIR = path.resolve(__dirname, 'data', 'billing', 'pppoe');
 
 // PREVENT PROCESS TERMINATION ON TERMINAL DISCONNECT
 process.on('SIGHUP', () => {
@@ -4713,13 +4716,13 @@ app.get('/api/network/pppoe/users', requireAdmin, async (req, res) => {
 
 app.post('/api/network/pppoe/users', requireAdmin, async (req, res) => {
   try {
-    const { username, password, billing_profile_id } = req.body;
+    const { username, password, billing_profile_id, expires_at } = req.body;
     
     if (!username || !password) {
       return res.status(400).json({ error: 'Username and password required' });
     }
     
-    const result = await network.addPPPoEUser(username, password, billing_profile_id);
+    const result = await network.addPPPoEUser(username, password, billing_profile_id, expires_at);
     res.json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -4891,6 +4894,32 @@ app.delete('/api/network/pppoe/users/:id', requireAdmin, async (req, res) => {
     const userId = parseInt(req.params.id);
     const result = await network.deletePPPoEUser(userId);
     res.json(result);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/network/pppoe/invoices', requireAdmin, async (req, res) => {
+  try {
+    const { user_id, username } = req.query || {};
+    const filters = [];
+    const values = [];
+    if (user_id) { filters.push('user_id = ?'); values.push(parseInt(String(user_id), 10)); }
+    if (username) { filters.push('username = ?'); values.push(String(username)); }
+    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const rows = await db.all(`SELECT * FROM pppoe_invoices ${where} ORDER BY generated_at DESC`, values);
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/network/pppoe/invoices/:id/pdf', requireAdmin, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const row = await db.get('SELECT * FROM pppoe_invoices WHERE id = ?', [id]);
+    if (!row || !row.pdf_path) return res.status(404).json({ error: 'PDF not found' });
+    const resolved = path.resolve(String(row.pdf_path));
+    const base = path.resolve(PPPoE_BILLING_DIR);
+    if (!resolved.startsWith(base)) return res.status(403).json({ error: 'Invalid PDF path' });
+    if (!fs.existsSync(resolved)) return res.status(404).json({ error: 'PDF file missing on disk' });
+    res.sendFile(resolved);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -6028,6 +6057,98 @@ function startBackgroundTimers() {
       }
     } catch (e) { console.error('[CLEANUP] Periodic TC cleanup error:', e.message); }
   }, 30000);
+
+  const processExpiredPPPoEUsers = async () => {
+    try {
+      const expiredUsers = await db.all(
+        "SELECT * FROM pppoe_users WHERE enabled = 1 AND expires_at IS NOT NULL AND expires_at != '' AND datetime(expires_at) <= datetime('now')"
+      );
+      if (!expiredUsers.length) return;
+
+      if (!fs.existsSync(PPPoE_BILLING_DIR)) {
+        fs.mkdirSync(PPPoE_BILLING_DIR, { recursive: true });
+      }
+
+      for (const u of expiredUsers) {
+        try {
+          await db.run(
+            "UPDATE pppoe_users SET enabled = 0, expired_at = COALESCE(expired_at, CURRENT_TIMESTAMP) WHERE id = ?",
+            [u.id]
+          );
+
+          await network.disconnectPPPoEUser(u.username).catch(() => {});
+
+          const existingInvoice = await db.get(
+            'SELECT id FROM pppoe_invoices WHERE user_id = ? AND expires_at = ? LIMIT 1',
+            [u.id, u.expires_at]
+          );
+          if (existingInvoice) continue;
+
+          let billing = null;
+          if (u.billing_profile_id) {
+            billing = await db.get(
+              `SELECT bp.id, bp.name as billing_profile_name, bp.price, p.name as profile_name
+               FROM pppoe_billing_profiles bp
+               LEFT JOIN pppoe_profiles p ON p.id = bp.profile_id
+               WHERE bp.id = ?`,
+              [u.billing_profile_id]
+            );
+          }
+
+          const generatedAt = new Date().toISOString();
+          const invoiceNo = `INV-PPPOE-${u.account_number || u.id}-${Date.now()}`;
+          const amount = billing?.price || 0;
+          const periodStart = u.last_billed_at || u.created_at || null;
+          const periodEnd = u.expires_at || generatedAt;
+
+          const insert = await db.run(
+            `INSERT INTO pppoe_invoices
+              (invoice_no, user_id, account_number, username, billing_profile_id, billing_profile_name, profile_name, amount, currency, period_start, period_end, expires_at, generated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PHP', ?, ?, ?, ?)`,
+            [
+              invoiceNo,
+              u.id,
+              u.account_number || null,
+              u.username,
+              u.billing_profile_id || null,
+              billing?.billing_profile_name || null,
+              billing?.profile_name || null,
+              amount,
+              periodStart,
+              periodEnd,
+              u.expires_at || null,
+              generatedAt
+            ]
+          );
+
+          const pdfPath = path.join(PPPoE_BILLING_DIR, `${invoiceNo}.pdf`);
+          await generatePPPoEInvoicePdf({
+            outputPath: pdfPath,
+            invoice: {
+              invoice_no: invoiceNo,
+              generated_at: generatedAt,
+              account_number: u.account_number || '',
+              username: u.username,
+              billing_profile_name: billing?.billing_profile_name || '',
+              profile_name: billing?.profile_name || '',
+              amount,
+              period_start: periodStart || '',
+              period_end: periodEnd || '',
+              expires_at: u.expires_at || ''
+            }
+          });
+          await db.run('UPDATE pppoe_invoices SET pdf_path = ? WHERE id = ?', [pdfPath, insert.lastID]);
+
+          await db.run('UPDATE pppoe_users SET last_billed_at = ? WHERE id = ?', [periodEnd, u.id]);
+        } catch (e) {}
+      }
+
+      await network.syncPPPoESecrets().catch(() => {});
+    } catch (e) {}
+  };
+
+  setInterval(() => { processExpiredPPPoEUsers(); }, 60000);
+  processExpiredPPPoEUsers();
 }
 
 (async () => {

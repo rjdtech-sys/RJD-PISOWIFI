@@ -631,12 +631,13 @@ export const apiClient = {
   async addPPPoEUser(
     username: string,
     password: string,
-    billing_profile_id?: number
+    billing_profile_id?: number,
+    expires_at?: string
   ): Promise<{ success: boolean; id?: number; account_number?: string }> {
     const res = await fetch(`${API_BASE}/network/pppoe/users`, {
       method: 'POST',
       headers: getHeaders(),
-      body: JSON.stringify({ username, password, billing_profile_id })
+      body: JSON.stringify({ username, password, billing_profile_id, expires_at })
     });
     return handleResponse(res);
   },

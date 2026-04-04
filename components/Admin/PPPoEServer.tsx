@@ -23,7 +23,7 @@ const PPPoEServer: React.FC = () => {
   const [pppoeBillingProfiles, setPppoeBillingProfiles] = useState<PPPoEBillingProfile[]>([]);
   const [pppoeLogs, setPppoeLogs] = useState<string[]>([]);
   
-  const [newPppoeUser, setNewPppoeUser] = useState({ username: '', password: '', billing_profile_id: '' });
+  const [newPppoeUser, setNewPppoeUser] = useState({ username: '', password: '', billing_profile_id: '', expires_at: '' });
   const [newProfile, setNewProfile] = useState<PPPoEProfile>({ name: '', rate_limit_dl: 5, rate_limit_ul: 5 });
   const [newBillingProfile, setNewBillingProfile] = useState<Partial<PPPoEBillingProfile>>({ profile_id: 0, name: '', price: 0 });
   const [pppoePools, setPppoePools] = useState<PPPoEPool[]>([]);
@@ -138,14 +138,15 @@ const PPPoEServer: React.FC = () => {
       const result = await apiClient.addPPPoEUser(
         newPppoeUser.username, 
         newPppoeUser.password, 
-        newPppoeUser.billing_profile_id ? parseInt(newPppoeUser.billing_profile_id) : undefined
+        newPppoeUser.billing_profile_id ? parseInt(newPppoeUser.billing_profile_id) : undefined,
+        newPppoeUser.expires_at || undefined
       );
       if (result?.account_number) {
         setLastCreatedAccountNumber(result.account_number);
       } else {
         setLastCreatedAccountNumber(null);
       }
-      setNewPppoeUser({ username: '', password: '', billing_profile_id: '' });
+      setNewPppoeUser({ username: '', password: '', billing_profile_id: '', expires_at: '' });
       await loadData();
       alert(`User ${newPppoeUser.username} added!${result?.account_number ? ` Account No: ${result.account_number}` : ''}`);
     } catch (e: any) {
@@ -194,6 +195,9 @@ const PPPoEServer: React.FC = () => {
       }
       if (typeof editingUser.billing_profile_id === 'number') {
         updates.billing_profile_id = editingUser.billing_profile_id;
+      }
+      if (editingUser.expires_at !== undefined) {
+        updates.expires_at = editingUser.expires_at;
       }
       await apiClient.updatePPPoEUser(editingUser.id, updates);
       setEditingUser(null);
@@ -766,6 +770,12 @@ const PPPoEServer: React.FC = () => {
                   <option value="">Select Billing Profile (Optional)...</option>
                   {pppoeBillingProfiles.map(bp => <option key={bp.id} value={bp.id}>{bp.name} (₱{bp.price})</option>)}
                 </select>
+                <input
+                  type="date"
+                  value={newPppoeUser.expires_at}
+                  onChange={e => setNewPppoeUser({ ...newPppoeUser, expires_at: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded px-2 py-1.5 text-[10px] font-bold outline-none focus:bg-white"
+                />
                 <button 
                   onClick={addPPPoEUserHandler} 
                   disabled={loading}
@@ -807,6 +817,15 @@ const PPPoEServer: React.FC = () => {
                         <span className="text-[8px] text-slate-500 font-bold uppercase tracking-tight">
                           ID: {user.id} • {user.created_at ? new Date(user.created_at).toLocaleDateString() : 'NO DATE'}
                         </span>
+                        {user.expires_at && (
+                          <span
+                            className={`text-[8px] px-1.5 py-0.5 rounded font-black ${
+                              (Date.parse(String(user.expires_at).split('T')[0].split(' ')[0] + 'T23:59:59') <= Date.now()) ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-700'
+                            }`}
+                          >
+                            EXP {String(user.expires_at).split('T')[0].split(' ')[0]}
+                          </span>
+                        )}
                         {user.billing_profile_id && (
                           <span className="text-[8px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded font-black">
                             {pppoeBillingProfiles.find(bp => bp.id === user.billing_profile_id)?.name || 'BILLED'}
@@ -838,7 +857,7 @@ const PPPoEServer: React.FC = () => {
             </div>
             {editingUser && (
               <div className="border-t border-slate-200 bg-slate-50/60 px-3 py-3">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-end">
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-2 items-end">
                   <div className="space-y-1">
                     <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Username</span>
                     <input
@@ -870,6 +889,15 @@ const PPPoEServer: React.FC = () => {
                         <option key={bp.id} value={bp.id}>{bp.name} (₱{bp.price})</option>
                       ))}
                     </select>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Expiration</span>
+                    <input
+                      type="date"
+                      value={(editingUser.expires_at || '').split('T')[0].split(' ')[0]}
+                      onChange={e => updateEditingUserField('expires_at', e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-[10px] font-bold outline-none"
+                    />
                   </div>
                   <div className="flex flex-col gap-1">
                     <label className="flex items-center gap-1 text-[9px] text-slate-600">
