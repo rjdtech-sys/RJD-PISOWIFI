@@ -6173,9 +6173,11 @@ function startBackgroundTimers() {
   const processExpiredPPPoEUsers = async () => {
     try {
       const expiredUsers = await db.all(
-        "SELECT * FROM pppoe_users WHERE enabled = 1 AND (expired_at IS NULL OR expired_at = '') AND expires_at IS NOT NULL AND expires_at != '' AND datetime(expires_at) <= datetime('now','localtime')"
+        "SELECT * FROM pppoe_users WHERE enabled = 1 AND (expired_at IS NULL OR expired_at = '') AND expires_at IS NOT NULL AND expires_at != '' AND datetime(replace(expires_at,'T',' ')) <= datetime('now','localtime')"
       );
       if (!expiredUsers.length) return;
+
+      console.log(`[PPPoE-Expire] Found ${expiredUsers.length} expired users. Expired pool mode: ${pppoeExpiredPool ? 'ON' : 'OFF'}`);
 
       if (!fs.existsSync(PPPoE_BILLING_DIR)) {
         fs.mkdirSync(PPPoE_BILLING_DIR, { recursive: true });
@@ -6261,11 +6263,15 @@ function startBackgroundTimers() {
           }
 
           await db.run('UPDATE pppoe_users SET last_billed_at = ? WHERE id = ?', [periodEnd, u.id]);
-        } catch (e) {}
+        } catch (e) {
+          console.error('[PPPoE-Expire] Per-user processing failed:', e.message);
+        }
       }
 
       await network.syncPPPoESecrets().catch(() => {});
-    } catch (e) {}
+    } catch (e) {
+      console.error('[PPPoE-Expire] Job failed:', e.message);
+    }
   };
 
   setInterval(() => { processExpiredPPPoEUsers(); }, 60000);
