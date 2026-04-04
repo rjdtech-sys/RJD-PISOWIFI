@@ -1073,36 +1073,6 @@ const PPPoEServer: React.FC = () => {
           </div>
         </div>
 
-        {/* Active Sessions */}
-        {pppoeStatus?.running && pppoeSessions.length > 0 && (
-          <div className="px-4 pb-4">
-            <div className="bg-indigo-50 border border-indigo-100 rounded-lg overflow-hidden">
-              <div className="px-3 py-2 border-b border-indigo-100 bg-indigo-100/50 flex justify-between items-center">
-                <h4 className="text-[9px] font-black text-indigo-900 uppercase tracking-widest">Active Connections</h4>
-                <span className="text-[8px] font-bold text-indigo-600 bg-white px-1.5 py-0.5 rounded border border-indigo-200">{pppoeSessions.length} ONLINE</span>
-              </div>
-              <div className="p-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                {pppoeSessions.map((session, idx) => (
-                  <div key={idx} className="bg-white p-2 rounded border border-indigo-200/50 flex flex-col gap-1 shadow-sm">
-                    <div className="flex items-center justify-between">
-                      <p className="text-[10px] font-black text-slate-900 truncate">{session.username}</p>
-                      <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-x-2 text-[8px] font-bold text-slate-400 uppercase tracking-tighter">
-                      <span>IP: <span className="text-indigo-600 font-mono">{session.ip}</span></span>
-                      <span>IF: <span className="text-indigo-600 font-mono">{session.interface}</span></span>
-                    </div>
-                    <div className="flex items-center justify-between pt-1 border-t border-indigo-50">
-                      <span className="text-[8px] text-slate-400">RX: <span className="text-slate-900 font-black">{(session.rx_bytes / 1024 / 1024).toFixed(1)} MB</span></span>
-                      <span className="text-[8px] text-slate-400">TX: <span className="text-slate-900 font-black">{(session.tx_bytes / 1024 / 1024).toFixed(1)} MB</span></span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Debug Logs Output */}
         <div className="px-4 pb-4">
           <div className="bg-slate-900 rounded-lg overflow-hidden border border-slate-800">
