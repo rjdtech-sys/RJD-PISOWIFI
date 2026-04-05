@@ -283,6 +283,20 @@ const PPPoEServer: React.FC = () => {
     }
   };
 
+  const deleteSaleHandler = async (sale: PPPoESale) => {
+    if (!sale?.id) return;
+    if (!confirm(`Delete sale for "${sale.username}" amount ₱${Number(sale.amount || 0).toFixed(2)}?`)) return;
+    try {
+      setLoading(true);
+      await apiClient.deletePPPoESale(sale.id);
+      await loadData();
+    } catch (e: any) {
+      alert(`Failed to delete sale: ${e.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const cancelPPPoEUserEdit = () => {
     setEditingUser(null);
   };
@@ -1111,8 +1125,17 @@ const PPPoEServer: React.FC = () => {
                         )}
                       </div>
                     </div>
-                    <div className="text-[8px] font-black text-slate-500 uppercase tracking-widest">
-                      {sale.payment_method || 'cash'}
+                    <div className="flex items-center gap-2">
+                      <div className="text-[8px] font-black text-slate-500 uppercase tracking-widest">
+                        {sale.payment_method || 'cash'}
+                      </div>
+                      <button
+                        onClick={() => deleteSaleHandler(sale)}
+                        disabled={loading}
+                        className="px-2 py-1 text-[8px] font-black uppercase tracking-widest border border-red-200 text-red-600 rounded hover:bg-red-50 disabled:opacity-50"
+                      >
+                        Delete
+                      </button>
                     </div>
                   </div>
                 )) : (

@@ -4846,6 +4846,17 @@ app.get('/api/network/pppoe/sales', requireAdmin, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+app.delete('/api/network/pppoe/sales/:id', requireAdmin, async (req, res) => {
+  try {
+    const id = parseInt(String(req.params.id), 10);
+    if (!id || Number.isNaN(id)) return res.status(400).json({ error: 'Invalid id' });
+    const existing = await db.get('SELECT id FROM pppoe_sales WHERE id = ?', [id]);
+    if (!existing) return res.status(404).json({ error: 'Sale not found' });
+    await db.run('DELETE FROM pppoe_sales WHERE id = ?', [id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.post('/api/network/pppoe/sales', requireAdmin, async (req, res) => {
   try {
     const { user_id, billing_profile_id, payment_method, notes, discount_days, apply_renewal } = req.body || {};
