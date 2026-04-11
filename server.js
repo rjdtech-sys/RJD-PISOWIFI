@@ -659,11 +659,11 @@ app.get('/api/mikrotik/routers', requireAdmin, async (req, res) => {
 
 app.post('/api/mikrotik/routers', requireAdmin, async (req, res) => {
   try {
-    const { name, host, port, username, password } = req.body || {};
+    const { name, host, port, username, password, connection_type, rest_scheme } = req.body || {};
     if (!name || !host || !username || !password) {
       return res.status(400).json({ error: 'name, host, username, and password are required' });
     }
-    const row = await mikrotikReadonly.createRouter({ name, host, port, username, password });
+    const row = await mikrotikReadonly.createRouter({ name, host, port, username, password, connection_type, rest_scheme });
     res.json(row);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -697,6 +697,20 @@ app.post('/api/mikrotik/routers/:id/test', requireAdmin, async (req, res) => {
     const id = String(req.params.id || '');
     if (!id) return res.status(400).json({ error: 'Invalid id' });
     const result = await mikrotikReadonly.testRouter(id);
+    if (!result.success) return res.status(400).json(result);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/mikrotik/routers/test', requireAdmin, async (req, res) => {
+  try {
+    const { host, port, username, password, connection_type, rest_scheme } = req.body || {};
+    if (!host || !username || !password) {
+      return res.status(400).json({ error: 'host, username, and password are required' });
+    }
+    const result = await mikrotikReadonly.testRouterDraft({ host, port, username, password, connection_type, rest_scheme });
     if (!result.success) return res.status(400).json(result);
     res.json(result);
   } catch (err) {

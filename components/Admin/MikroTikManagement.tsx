@@ -14,7 +14,19 @@ const MikroTikManagement: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
 
-  const [newRouter, setNewRouter] = useState({ name: '', host: '', port: '8728', username: 'admin', password: '' });
+  const [newRouter, setNewRouter] = useState({
+    name: '',
+    host: '',
+    port: '8728',
+    connection_type: 'api' as const,
+    rest_scheme: 'http' as const,
+    username: 'admin',
+    password: ''
+  });
+
+  const [draftTest, setDraftTest] = useState<{ status: 'idle' | 'loading' | 'success' | 'error'; message: string }>(
+    { status: 'idle', message: '' }
+  );
 
   const selectedRouter = useMemo(
     () => routers.find(r => r.id === selectedRouterId) || null,
@@ -71,10 +83,13 @@ const MikroTikManagement: React.FC = () => {
         name: newRouter.name,
         host: newRouter.host,
         port: Number(newRouter.port) || 8728,
+        connection_type: newRouter.connection_type,
+        rest_scheme: newRouter.rest_scheme,
         username: newRouter.username,
         password: newRouter.password
       });
-      setNewRouter({ name: '', host: '', port: '8728', username: 'admin', password: '' });
+      setNewRouter({ name: '', host: '', port: '8728', connection_type: 'api', rest_scheme: 'http', username: 'admin', password: '' });
+      setDraftTest({ status: 'idle', message: '' });
       await loadRouters(false);
       if (created?.id) setSelectedRouterId(created.id);
       alert('Router saved.');
@@ -82,6 +97,32 @@ const MikroTikManagement: React.FC = () => {
       setError(e?.message || 'Failed to save router');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const onTestDraft = async () => {
+    if (!newRouter.host || !newRouter.username || !newRouter.password) {
+      setDraftTest({ status: 'error', message: 'Host, username, and password are required to test.' });
+      return;
+    }
+    setDraftTest({ status: 'loading', message: 'Testing connection...' });
+    try {
+      const result = await apiClient.testMikrotikRouterDraft({
+        host: newRouter.host,
+        port: Number(newRouter.port) || undefined,
+        connection_type: newRouter.connection_type,
+        rest_scheme: newRouter.rest_scheme,
+        username: newRouter.username,
+        password: newRouter.password
+      });
+      if (result?.success) {
+        const identity = result.snapshot?.identity ? ` (${result.snapshot.identity})` : '';
+        setDraftTest({ status: 'success', message: `Connection OK${identity}.` });
+      } else {
+        setDraftTest({ status: 'error', message: result?.error || 'Connection failed.' });
+      }
+    } catch (e: any) {
+      setDraftTest({ status: 'error', message: e?.message || 'Connection failed.' });
     }
   };
 
@@ -124,7 +165,7 @@ const MikroTikManagement: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div>
           <h1 className="text-xl font-black text-slate-900 uppercase tracking-tight">MikroTik Management</h1>
-          <p className="text-xs text-slate-500">Read-only billing-related data via RouterOS API.</p>
+          <p className="text-xs text-slate-500">Read-only billing-related data via RouterOS API or REST API.</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -163,7 +204,17 @@ const MikroTikManagement: React.FC = () => {
             onTestSelected={() => selectedRouter && onTestRouter(selectedRouter.id)}
           />
 
-          <AddRouterCard loading={loading} value={newRouter} onChange={setNewRouter} onSave={onCreateRouter} />
+          <AddRouterCard
+            loading={loading}
+            draftTest={draftTest}
+            value={newRouter}
+            onChange={(next) => {
+              setNewRouter(next);
+              if (draftTest.status !== 'idle') setDraftTest({ status: 'idle', message: '' });
+            }}
+            onTest={onTestDraft}
+            onSave={onCreateRouter}
+          />
         </div>
 
         <div className="lg:col-span-8 space-y-6">

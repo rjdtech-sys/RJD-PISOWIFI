@@ -60,7 +60,7 @@ const RouterConnectionsCard: React.FC<Props> = ({
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <div className="text-sm font-bold text-slate-900 truncate">{r.name}</div>
-                <div className="text-[11px] text-slate-500 truncate">{r.host}:{r.port} • {r.username}</div>
+                <div className="text-[11px] text-slate-500 truncate">{r.host}:{r.port} • {(r.connection_type || 'api').toUpperCase()} • {r.username}</div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <span className={`inline-flex items-center px-2 py-0.5 rounded-full border text-[10px] font-bold uppercase tracking-widest ${statusChipClass(r.status)}`}>
@@ -88,4 +88,3 @@ const RouterConnectionsCard: React.FC<Props> = ({
 };
 
 export default RouterConnectionsCard;
-

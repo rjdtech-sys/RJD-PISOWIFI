@@ -1049,7 +1049,7 @@ export const apiClient = {
     return handleResponse(res);
   }
   ,
-  async createMikrotikRouter(payload: { name: string; host: string; port?: number; username: string; password: string }): Promise<MikrotikRouter> {
+  async createMikrotikRouter(payload: { name: string; host: string; port?: number; connection_type?: 'api' | 'rest'; rest_scheme?: 'http' | 'https'; username: string; password: string }): Promise<MikrotikRouter> {
     const res = await fetch(`${API_BASE}/mikrotik/routers`, {
       method: 'POST',
       headers: getHeaders(),
@@ -1058,7 +1058,7 @@ export const apiClient = {
     return handleResponse(res);
   }
   ,
-  async updateMikrotikRouter(id: string, payload: { name?: string; host?: string; port?: number; username?: string; password?: string }): Promise<MikrotikRouter> {
+  async updateMikrotikRouter(id: string, payload: { name?: string; host?: string; port?: number; connection_type?: 'api' | 'rest'; rest_scheme?: 'http' | 'https'; username?: string; password?: string }): Promise<MikrotikRouter> {
     const res = await fetch(`${API_BASE}/mikrotik/routers/${encodeURIComponent(id)}`, {
       method: 'PUT',
       headers: getHeaders(),
@@ -1079,6 +1079,15 @@ export const apiClient = {
     const res = await fetch(`${API_BASE}/mikrotik/routers/${encodeURIComponent(id)}/test`, {
       method: 'POST',
       headers: getHeaders()
+    });
+    return handleResponse(res);
+  }
+  ,
+  async testMikrotikRouterDraft(payload: { host: string; port?: number; connection_type?: 'api' | 'rest'; rest_scheme?: 'http' | 'https'; username: string; password: string }): Promise<{ success: boolean; snapshot?: MikrotikRouterSnapshot; error?: string }> {
+    const res = await fetch(`${API_BASE}/mikrotik/routers/test`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(payload)
     });
     return handleResponse(res);
   }

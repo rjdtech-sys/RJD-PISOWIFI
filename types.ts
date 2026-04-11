@@ -290,11 +290,16 @@ export enum AdminTab {
 
 export type MikrotikRouterStatus = 'connected' | 'disconnected' | 'error';
 
+export type MikrotikConnectionType = 'api' | 'rest';
+export type MikrotikRestScheme = 'http' | 'https';
+
 export interface MikrotikRouter {
   id: string;
   name: string;
   host: string;
   port: number;
+  connection_type?: MikrotikConnectionType;
+  rest_scheme?: MikrotikRestScheme;
   username: string;
   status: MikrotikRouterStatus;
   last_checked_at?: string | null;
