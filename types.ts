@@ -276,6 +276,7 @@ export enum AdminTab {
   Themes = 'themes',
   PortalEditor = 'portal_editor',
   PPPoE = 'pppoe',
+  MikroTik = 'mikrotik',
   Machines = 'machines',
   Bandwidth = 'bandwidth',
   MultiWan = 'multi_wan',
@@ -285,6 +286,65 @@ export enum AdminTab {
   Remote = 'remote',
   Rewards = 'rewards',
   CompanySettings = 'company_settings'
+}
+
+export type MikrotikRouterStatus = 'connected' | 'disconnected' | 'error';
+
+export interface MikrotikRouter {
+  id: string;
+  name: string;
+  host: string;
+  port: number;
+  username: string;
+  status: MikrotikRouterStatus;
+  last_checked_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface MikrotikRouterSnapshot {
+  identity?: string;
+  uptime?: string;
+  version?: string;
+  board_name?: string;
+  cpu_load?: number;
+  free_memory?: number;
+  total_memory?: number;
+}
+
+export interface MikrotikPppProfile {
+  id?: string;
+  name?: string;
+  local_address?: string;
+  remote_address?: string;
+  rate_limit?: string;
+  only_one?: string;
+}
+
+export interface MikrotikPppSecret {
+  id?: string;
+  name?: string;
+  service?: string;
+  profile?: string;
+  disabled?: string;
+  comment?: string;
+  last_logged_out?: string;
+}
+
+export interface MikrotikPppActive {
+  id?: string;
+  name?: string;
+  service?: string;
+  address?: string;
+  uptime?: string;
+  caller_id?: string;
+}
+
+export interface MikrotikBillingData {
+  snapshot: MikrotikRouterSnapshot;
+  ppp_profiles: MikrotikPppProfile[];
+  ppp_secrets: MikrotikPppSecret[];
+  ppp_actives: MikrotikPppActive[];
 }
 
 export interface UpdateLog {

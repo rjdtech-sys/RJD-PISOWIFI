@@ -12,6 +12,7 @@ import Login from './components/Admin/Login';
 import ThemeSettings from './components/Admin/ThemeSettings';
 import PortalEditor from './components/Admin/PortalEditor';
 import PPPoEServer from './components/Admin/PPPoEServer';
+import MikroTikManagement from './components/Admin/MikroTikManagement';
 import { MyMachines } from './components/Admin/MyMachines';
 import BandwidthManager from './components/Admin/BandwidthManager';
 import MultiWanSettings from './components/Admin/MultiWanSettings';
@@ -411,6 +412,7 @@ const App: React.FC = () => {
             <SidebarItem disabled={!licenseStatus.canOperate && !licenseStatus.isRevoked} active={activeTab === AdminTab.Themes} onClick={() => setActiveTab(AdminTab.Themes)} icon="🎨" label="Themes" collapsed={!sidebarOpen} />
             <SidebarItem disabled={!licenseStatus.canOperate && !licenseStatus.isRevoked} active={activeTab === AdminTab.PortalEditor} onClick={() => setActiveTab(AdminTab.PortalEditor)} icon="🖥️" label="Portal" collapsed={!sidebarOpen} />
             <SidebarItem disabled={!licenseStatus.canOperate && !licenseStatus.isRevoked} active={activeTab === AdminTab.PPPoE} onClick={() => setActiveTab(AdminTab.PPPoE)} icon="📞" label="PPPoE" collapsed={!sidebarOpen} />
+            <SidebarItem disabled={!licenseStatus.canOperate && !licenseStatus.isRevoked} active={activeTab === AdminTab.MikroTik} onClick={() => setActiveTab(AdminTab.MikroTik)} icon="📡" label="MikroTik" collapsed={!sidebarOpen} />
             <SidebarItem disabled={!licenseStatus.canOperate && !licenseStatus.isRevoked} active={activeTab === AdminTab.Bandwidth} onClick={() => setActiveTab(AdminTab.Bandwidth)} icon="📶" label="QoS" collapsed={!sidebarOpen} />
             <SidebarItem disabled={!licenseStatus.canOperate && !licenseStatus.isRevoked} active={activeTab === AdminTab.MultiWan} onClick={() => setActiveTab(AdminTab.MultiWan)} icon="🔀" label="Multi-WAN" collapsed={!sidebarOpen} />
             <SidebarItem disabled={!licenseStatus.canOperate && !licenseStatus.isRevoked} active={activeTab === AdminTab.Chat} onClick={() => setActiveTab(AdminTab.Chat)} icon="💬" label="Chat" collapsed={!sidebarOpen} />
@@ -484,6 +486,7 @@ const App: React.FC = () => {
                   {activeTab === AdminTab.Themes && <ThemeSettings />}
                   {activeTab === AdminTab.PortalEditor && <PortalEditor />}
                   {activeTab === AdminTab.PPPoE && <PPPoEServer />}
+                  {activeTab === AdminTab.MikroTik && <MikroTikManagement />}
                   {activeTab === AdminTab.Bandwidth && <BandwidthManager devices={devices} rates={rates} />}
                   {activeTab === AdminTab.MultiWan && <MultiWanSettings />}
                   {activeTab === AdminTab.Chat && <ChatManager />}

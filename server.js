@@ -19,6 +19,7 @@ const AdmZip = require('adm-zip');
 const { generatePPPoEInvoicePdf } = require('./lib/pppoe-billing');
 const { generatePPPoEUserFormPdf } = require('./lib/pppoe-user-form');
 const { generatePPPoESaleReceiptPdf } = require('./lib/pppoe-sale-receipt');
+const mikrotikReadonly = require('./lib/mikrotik-readonly');
 
 const PPPoE_BILLING_DIR = path.resolve(__dirname, 'data', 'billing', 'pppoe');
 const PPPoE_FORMS_DIR = path.resolve(__dirname, 'data', 'forms', 'pppoe');
@@ -641,6 +642,73 @@ app.post('/api/settings/company', requireAdmin, uploadBranding.single('logo'), a
     }
     
     const data = await settings.updateCompanySettings(companyName, logoPath);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/mikrotik/routers', requireAdmin, async (req, res) => {
+  try {
+    const rows = await mikrotikReadonly.listRouters();
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/mikrotik/routers', requireAdmin, async (req, res) => {
+  try {
+    const { name, host, port, username, password } = req.body || {};
+    if (!name || !host || !username || !password) {
+      return res.status(400).json({ error: 'name, host, username, and password are required' });
+    }
+    const row = await mikrotikReadonly.createRouter({ name, host, port, username, password });
+    res.json(row);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/mikrotik/routers/:id', requireAdmin, async (req, res) => {
+  try {
+    const id = String(req.params.id || '');
+    if (!id) return res.status(400).json({ error: 'Invalid id' });
+    const row = await mikrotikReadonly.updateRouter(id, req.body || {});
+    res.json(row);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/mikrotik/routers/:id', requireAdmin, async (req, res) => {
+  try {
+    const id = String(req.params.id || '');
+    if (!id) return res.status(400).json({ error: 'Invalid id' });
+    const result = await mikrotikReadonly.deleteRouter(id);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/mikrotik/routers/:id/test', requireAdmin, async (req, res) => {
+  try {
+    const id = String(req.params.id || '');
+    if (!id) return res.status(400).json({ error: 'Invalid id' });
+    const result = await mikrotikReadonly.testRouter(id);
+    if (!result.success) return res.status(400).json(result);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/mikrotik/routers/:id/billing', requireAdmin, async (req, res) => {
+  try {
+    const id = String(req.params.id || '');
+    if (!id) return res.status(400).json({ error: 'Invalid id' });
+    const data = await mikrotikReadonly.fetchBillingData(id);
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });

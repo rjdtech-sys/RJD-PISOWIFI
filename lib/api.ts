@@ -1,5 +1,5 @@
 
-import { Rate, NetworkInterface, SystemConfig, WanConfig, VlanConfig, WifiDevice, DeviceSession, PPPoEServerConfig, PPPoEUser, PPPoESession, QoSConfig, PPPoEProfile, PPPoEBillingProfile, PPPoEPool, PPPoESale } from '../types';
+import { Rate, NetworkInterface, SystemConfig, WanConfig, VlanConfig, WifiDevice, DeviceSession, PPPoEServerConfig, PPPoEUser, PPPoESession, QoSConfig, PPPoEProfile, PPPoEBillingProfile, PPPoEPool, PPPoESale, MikrotikRouter, MikrotikBillingData, MikrotikRouterSnapshot } from '../types';
 
 const API_BASE = '/api';
 
@@ -1042,5 +1042,49 @@ export const apiClient = {
       body: formData
     });
     return res.json();
+  }
+  ,
+  async getMikrotikRouters(): Promise<MikrotikRouter[]> {
+    const res = await fetch(`${API_BASE}/mikrotik/routers`, { headers: getHeaders() });
+    return handleResponse(res);
+  }
+  ,
+  async createMikrotikRouter(payload: { name: string; host: string; port?: number; username: string; password: string }): Promise<MikrotikRouter> {
+    const res = await fetch(`${API_BASE}/mikrotik/routers`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(payload)
+    });
+    return handleResponse(res);
+  }
+  ,
+  async updateMikrotikRouter(id: string, payload: { name?: string; host?: string; port?: number; username?: string; password?: string }): Promise<MikrotikRouter> {
+    const res = await fetch(`${API_BASE}/mikrotik/routers/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify(payload)
+    });
+    return handleResponse(res);
+  }
+  ,
+  async deleteMikrotikRouter(id: string): Promise<{ success: boolean }> {
+    const res = await fetch(`${API_BASE}/mikrotik/routers/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: getHeaders()
+    });
+    return handleResponse(res);
+  }
+  ,
+  async testMikrotikRouter(id: string): Promise<{ success: boolean; snapshot?: MikrotikRouterSnapshot; error?: string }> {
+    const res = await fetch(`${API_BASE}/mikrotik/routers/${encodeURIComponent(id)}/test`, {
+      method: 'POST',
+      headers: getHeaders()
+    });
+    return handleResponse(res);
+  }
+  ,
+  async getMikrotikBillingData(id: string): Promise<MikrotikBillingData> {
+    const res = await fetch(`${API_BASE}/mikrotik/routers/${encodeURIComponent(id)}/billing`, { headers: getHeaders() });
+    return handleResponse(res);
   }
 };
