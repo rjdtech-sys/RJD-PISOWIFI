@@ -23,6 +23,9 @@ const BillingCard: React.FC<Props> = ({ billing, loading }) => {
         <div>
           <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Billing Data</div>
           <div className="text-sm font-bold text-slate-900">PPPoE</div>
+          {!!(billing?.errors && billing.errors.length > 0) && (
+            <div className="text-[11px] text-amber-700 mt-1">Some data could not be fetched. Check permissions and REST API access.</div>
+          )}
         </div>
         <div className="flex flex-col md:flex-row md:items-center gap-2">
           <input
@@ -68,6 +71,11 @@ const BillingCard: React.FC<Props> = ({ billing, loading }) => {
       </div>
 
       <div className="overflow-x-auto">
+        {!!(billing?.errors && billing.errors.length > 0) && (
+          <div className="px-4 py-3 bg-amber-50 border-b border-amber-200 text-amber-900 text-[11px]">
+            {billing.errors[0]}
+          </div>
+        )}
         {activeView === 'secrets' && (
           <table className="min-w-full text-xs">
             <thead className="bg-slate-50 border-b border-slate-100">
@@ -165,4 +173,3 @@ const BillingCard: React.FC<Props> = ({ billing, loading }) => {
 };
 
 export default BillingCard;
-

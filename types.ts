@@ -350,6 +350,7 @@ export interface MikrotikBillingData {
   ppp_profiles: MikrotikPppProfile[];
   ppp_secrets: MikrotikPppSecret[];
   ppp_actives: MikrotikPppActive[];
+  errors?: string[];
 }
 
 export interface UpdateLog {
