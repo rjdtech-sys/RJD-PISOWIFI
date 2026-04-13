@@ -18,6 +18,8 @@ const SalesReportPage: React.FC<SalesReportPageProps> = ({ routerId }) => {
   const fetchSales = async () => {
     try {
       setLoading(true);
+      console.log('[SalesReport] Fetching sales for router:', routerId);
+      
       let url = `/api/mikrotik/routers/${routerId}/sales`;
       const params = new URLSearchParams();
       
@@ -26,17 +28,24 @@ const SalesReportPage: React.FC<SalesReportPageProps> = ({ routerId }) => {
       
       if (params.toString()) url += `?${params.toString()}`;
 
+      console.log('[SalesReport] Request URL:', url);
+
       const response = await fetch(url, { credentials: 'include' });
+      console.log('[SalesReport] Response status:', response.status);
+      
       if (!response.ok) throw new Error('Failed to fetch sales');
       
       const data = await response.json();
+      console.log('[SalesReport] Received data:', data);
+      console.log('[SalesReport] Number of sales:', data.length);
+      
       setSales(data);
       
       // Calculate total
       const total = data.reduce((sum: number, sale: any) => sum + sale.amount, 0);
       setTotalSales(total);
     } catch (err) {
-      console.error('Error fetching sales:', err);
+      console.error('[SalesReport] Error fetching sales:', err);
     } finally {
       setLoading(false);
     }

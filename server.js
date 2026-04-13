@@ -943,11 +943,22 @@ app.post('/api/mikrotik/routers/:id/process-payment', requireAdmin, async (req, 
     
     const id = require('crypto').randomUUID();
     
+    console.log('[MikroTik Payment] Processing payment:', {
+      id,
+      routerId,
+      username,
+      amount,
+      payment_date,
+      next_duedate
+    });
+    
     // Save payment record with discount info
     await db.run(
       'INSERT INTO mikrotik_sales (id, router_id, secret_id, username, billing_plan_id, plan_name, amount, original_amount, discount_days, discount_amount, currency, payment_date, next_duedate, expired_profile, payment_method, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [id, routerId, secret_id, username, billing_plan_id, plan_name, amount, original_amount || amount, discount_days || 0, discount_amount || 0, currency || 'PHP', payment_date, next_duedate, expired_profile, payment_method || 'cash', notes || '']
     );
+    
+    console.log('[MikroTik Payment] Payment record saved to database');
     
     // Update PPPoE secret profile back to billing plan profile
     await mikrotikReadonly.updateSecret(routerId, secret_id, {
@@ -984,6 +995,8 @@ app.get('/api/mikrotik/routers/:id/sales', requireAdmin, async (req, res) => {
     const routerId = String(req.params.id || '');
     if (!routerId) return res.status(400).json({ error: 'Invalid router id' });
     
+    console.log('[MikroTik Sales] Fetching sales for router:', routerId);
+    
     const { start_date, end_date } = req.query;
     
     let query = 'SELECT * FROM mikrotik_sales WHERE router_id = ?';
@@ -1001,9 +1014,14 @@ app.get('/api/mikrotik/routers/:id/sales', requireAdmin, async (req, res) => {
     
     query += ' ORDER BY payment_date DESC';
     
+    console.log('[MikroTik Sales] Query:', query, 'Params:', params);
+    
     const sales = await db.all(query, params);
+    console.log('[MikroTik Sales] Found', sales ? sales.length : 0, 'sales');
+    
     res.json(sales || []);
   } catch (err) {
+    console.error('[MikroTik Sales] Error:', err);
     res.status(500).json({ error: err.message });
   }
 });
