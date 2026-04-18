@@ -10,6 +10,7 @@ import {
   Edit2
 } from 'lucide-react';
 import opiPinout from '../../lib/opi_pinout';
+import rpiPinout from '../../lib/rpi_pinout';
 import NodeMCUManager from './NodeMCUManager';
 
 const opiPinoutModule: any = opiPinout as any;
@@ -17,10 +18,16 @@ const opiMappings: Record<string, { name?: string; pins: Record<number, number> 
 const ORANGE_PI_MODELS = ['orange_pi_one', 'orange_pi_zero_3', 'orange_pi_pc', 'orange_pi_5'];
 const ORANGE_PI_DEFAULT_MODEL = 'orange_pi_one';
 
+const rpiPinoutModule: any = rpiPinout as any;
+const rpiMappings: Record<string, { name?: string; pins: Record<number, number> }> = rpiPinoutModule?.mappings || {};
+const RASPBERRY_PI_MODELS = ['raspberry_pi_4b', 'raspberry_pi_2b_3b', 'raspberry_pi_5', 'raspberry_pi_zero'];
+const RASPBERRY_PI_DEFAULT_MODEL = 'raspberry_pi_4b';
+
 const HardwareManager: React.FC = () => {
   const [board, setBoard] = useState<BoardType>('none');
   const [pin, setPin] = useState(2);
   const [boardModel, setBoardModel] = useState<string>('orange_pi_one');
+  const [rpiBoardModel, setRpiBoardModel] = useState<string>('raspberry_pi_4b');
   const [relayPin, setRelayPin] = useState<number | null>(null);
   const [relayActiveMode, setRelayActiveMode] = useState<'high' | 'low'>('high');
   
@@ -176,7 +183,19 @@ const HardwareManager: React.FC = () => {
     }
   }, [board, boardModel, pin]);
 
+  useEffect(() => {
+    if (board !== 'raspberry_pi') return;
+    const modelKey = rpiBoardModel || RASPBERRY_PI_DEFAULT_MODEL;
+    const pinsMap = rpiMappings[modelKey]?.pins || {};
+    const physicalPins = Object.keys(pinsMap).map(p => parseInt(p, 10)).sort((a, b) => a - b);
+    if (physicalPins.length === 0) return;
+    if (!physicalPins.includes(pin)) {
+      setPin(physicalPins[0]);
+    }
+  }, [board, rpiBoardModel, pin]);
+
   const isOrangePi = board === 'orange_pi';
+  const isRaspberryPi = board === 'raspberry_pi';
   const isX64 = board === 'x64_pc';
 
   const currentOrangeModelKey = boardModel || ORANGE_PI_DEFAULT_MODEL;
@@ -197,6 +216,25 @@ const HardwareManager: React.FC = () => {
     ? (opiMappings[currentOrangeModelKey]?.name || currentOrangeModelKey.replace(/_/g, ' '))
     : null;
 
+  // Raspberry Pi pin mapping
+  const currentRpiModelKey = rpiBoardModel || RASPBERRY_PI_DEFAULT_MODEL;
+  const currentRpiPinsMap = rpiMappings[currentRpiModelKey]?.pins || {};
+  const currentRpiPins = Object.keys(currentRpiPinsMap)
+    .map(p => parseInt(p, 10))
+    .sort((a, b) => a - b);
+
+  const getRpiGpioLabel = (physicalPin: number) => {
+    const gpio = currentRpiPinsMap[physicalPin];
+    if (typeof gpio !== 'number') return '';
+    return `BCM ${gpio}`;
+  };
+
+  const rpiGpioForSelectedPin = isRaspberryPi ? currentRpiPinsMap[pin] : undefined;
+
+  const rpiModelLabel = isRaspberryPi && currentRpiModelKey
+    ? (rpiMappings[currentRpiModelKey]?.name || currentRpiModelKey.replace(/_/g, ' '))
+    : null;
+
   const parsedSharePercent = parseFloat(coinsOutSharePercent || '0');
   const safeSharePercent = isNaN(parsedSharePercent) ? 0 : parsedSharePercent;
   const coinsOutShareAmount = mainRevenue * (safeSharePercent / 100);
@@ -208,6 +246,9 @@ const HardwareManager: React.FC = () => {
       setBoard(cfg.boardType);
       setPin(cfg.coinPin);
       if (cfg.boardModel) setBoardModel(cfg.boardModel);
+      if (cfg.boardType === 'raspberry_pi' && cfg.boardModel) {
+        setRpiBoardModel(cfg.boardModel);
+      }
       if (typeof cfg.relayPin === 'number') {
         setRelayPin(cfg.relayPin);
       }
@@ -217,6 +258,20 @@ const HardwareManager: React.FC = () => {
 
       if (cfg.coinSlots && cfg.coinSlots.length > 0) {
         setCoinSlots(cfg.coinSlots);
+      }
+
+      // Backward compatibility: if Raspberry Pi coinPin is a BCM GPIO number (not a physical pin), convert it
+      if (cfg.boardType === 'raspberry_pi') {
+        const modelKey = cfg.boardModel || RASPBERRY_PI_DEFAULT_MODEL;
+        const pinsMap = rpiMappings[modelKey]?.pins || {};
+        const physicalPins = Object.keys(pinsMap).map(p => parseInt(p, 10));
+        if (!physicalPins.includes(cfg.coinPin)) {
+          // coinPin is a BCM GPIO number, find the corresponding physical pin
+          if (rpiPinoutModule?.bcmToPhysicalPin) {
+            const physPin = rpiPinoutModule.bcmToPhysicalPin(modelKey, cfg.coinPin);
+            if (physPin) setPin(physPin);
+          }
+        }
       }
     } catch (e) {
       console.error('Failed to load hardware config');
@@ -241,7 +296,7 @@ const HardwareManager: React.FC = () => {
       await apiClient.saveConfig({ 
         boardType: board, 
         coinPin: pin,
-        boardModel: board === 'orange_pi' ? boardModel : null,
+        boardModel: (board === 'orange_pi' || board === 'raspberry_pi') ? (board === 'orange_pi' ? boardModel : rpiBoardModel) : null,
         coinSlots: coinSlots,
         relayPin: board === 'none' || board === 'nodemcu_esp' || board === 'x64_pc' ? null : relayPin,
         relayActiveMode: relayPin != null ? relayActiveMode : 'high'
@@ -444,40 +499,101 @@ const HardwareManager: React.FC = () => {
                    {saving ? 'Saving...' : 'Apply Config'}
                  </button>
                </div>
-             ) : (
-               <div className="flex flex-col sm:flex-row gap-4">
-                 <div className="flex-1 bg-slate-50 rounded-lg p-3 border border-slate-200">
-                   <div className="flex justify-between items-center mb-2">
-                     <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Coin Pin (Main)</label>
-                     <div className="text-[10px] font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">GPIO {pin}</div>
-                   </div>
-                   <input
-                     type="range"
-                     min="2"
-                     max="27"
-                     value={pin}
-                     onChange={(e) => setPin(parseInt(e.target.value, 10))}
-                     className="w-full accent-slate-900 h-1.5 rounded-lg appearance-none bg-slate-200 cursor-pointer"
-                   />
+             ) : isRaspberryPi ? (
+               <div className="space-y-4">
+                 <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+                   <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Board Model</label>
+                   <select
+                     value={currentRpiModelKey}
+                     onChange={(e) => setRpiBoardModel(e.target.value)}
+                     className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-[11px] font-bold text-slate-800 outline-none focus:ring-1 focus:ring-blue-500"
+                   >
+                     {RASPBERRY_PI_MODELS.map(modelKey => {
+                       const label = (rpiMappings[modelKey]?.name || modelKey.replace(/_/g, ' '));
+                       return (
+                         <option key={modelKey} value={modelKey}>
+                           {label}
+                         </option>
+                       );
+                     })}
+                   </select>
                  </div>
-                 <div className="flex-1 bg-slate-50 rounded-lg p-3 border border-slate-200">
-                   <div className="flex justify-between items-center mb-2">
-                     <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Relay Pin (Output)</label>
-                     <div className="text-[10px] font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">
-                       {relayPin != null ? `GPIO ${relayPin}` : 'Disabled'}
+
+                 <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+                   <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                     <div className="flex-1">
+                       <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Coin Pin (Main)</label>
+                       <select
+                         value={String(pin)}
+                         onChange={(e) => setPin(parseInt(e.target.value, 10))}
+                         className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-[11px] font-bold text-slate-800 outline-none focus:ring-1 focus:ring-blue-500"
+                       >
+                         {currentRpiPins.map(p => (
+                           <option key={p} value={p}>
+                             {`Pin ${p} (${getRpiGpioLabel(p)})`}
+                           </option>
+                         ))}
+                       </select>
                      </div>
+                     <div className="flex-1">
+                       <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Relay Pin (Output)</label>
+                       <select
+                         value={relayPin !== null ? String(relayPin) : ''}
+                         onChange={(e) => {
+                           const v = e.target.value;
+                           setRelayPin(v ? parseInt(v, 10) : null);
+                         }}
+                         className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-[11px] font-bold text-slate-800 outline-none focus:ring-1 focus:ring-blue-500"
+                       >
+                         <option value="">Disabled</option>
+                         {currentRpiPins.map(p => (
+                           <option key={p} value={p}>
+                             {`Pin ${p} (${getRpiGpioLabel(p)})`}
+                           </option>
+                         ))}
+                       </select>
+                     </div>
+                     <button
+                       onClick={handleSave}
+                       disabled={saving}
+                       className="admin-btn-primary w-full sm:w-48 py-3 rounded-lg font-black text-[10px] uppercase tracking-[0.2em] transition-all shadow-lg active:scale-95 disabled:opacity-50 flex justify-center items-center gap-2"
+                     >
+                       <Save size={12} />
+                       {saving ? 'Saving...' : 'Apply Config'}
+                     </button>
                    </div>
-                   <input
-                     type="range"
-                     min="2"
-                     max="27"
-                     value={relayPin != null ? relayPin : 2}
-                     onChange={(e) => setRelayPin(parseInt(e.target.value, 10))}
-                     className="w-full accent-slate-900 h-1.5 rounded-lg appearance-none bg-slate-200 cursor-pointer"
-                   />
-                   <div className="mt-3 flex flex-wrap items-center gap-3">
-                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Relay Mode</span>
-                    <div className="flex items-center gap-2 text-[10px] font-bold">
+                 </div>
+
+                 <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+                   <div className="flex justify-between items-center mb-3">
+                     <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Available Pins</div>
+                     {currentRpiPins.length > 0 && (
+                       <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                         {`Showing first ${Math.min(16, currentRpiPins.length)} of ${currentRpiPins.length} available pins`}
+                       </div>
+                     )}
+                   </div>
+                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                     {currentRpiPins.slice(0, 16).map(p => (
+                       <button
+                         key={p}
+                         type="button"
+                         onClick={() => setPin(p)}
+                         className={`p-3 rounded-lg border text-left transition-all ${
+                           pin === p
+                             ? 'border-blue-600 bg-blue-50 text-blue-700 shadow-sm'
+                             : 'border-slate-200 text-slate-600 hover:border-slate-400'
+                         }`}
+                       >
+                         <div className="text-[11px] font-black tracking-wide">P{p}</div>
+                         <div className="text-[9px] text-slate-500">{getRpiGpioLabel(p)}</div>
+                       </button>
+                     ))}
+                   </div>
+                 </div>
+                 <div className="mt-3 flex flex-wrap items-center gap-3">
+                   <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Relay Mode</span>
+                   <div className="flex items-center gap-2 text-[10px] font-bold">
                       <button
                         type="button"
                         onClick={() => setRelayActiveMode('high')}
@@ -501,7 +617,15 @@ const HardwareManager: React.FC = () => {
                         Active Low
                       </button>
                     </div>
-                  </div>
+                 </div>
+               </div>
+             ) : (
+               <div className="flex flex-col sm:flex-row gap-4">
+                 <div className="flex-1 bg-slate-50 rounded-lg p-3 border border-slate-200">
+                   <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Simulated Mode</div>
+                   <p className="text-[10px] text-slate-600">
+                     No physical GPIO pins. This mode is for testing and does not require pin configuration.
+                   </p>
                  </div>
                  <button
                    onClick={handleSave}
@@ -539,6 +663,8 @@ const HardwareManager: React.FC = () => {
                   <span className="font-bold text-slate-900">
                     {isOrangePi && typeof orangeGpioForSelectedPin === 'number'
                       ? `Pin ${pin} (GPIO ${orangeGpioForSelectedPin})`
+                      : isRaspberryPi && typeof rpiGpioForSelectedPin === 'number'
+                      ? `Pin ${pin} (BCM ${rpiGpioForSelectedPin})`
                       : `GPIO ${pin}`}
                   </span>
                 </div>
@@ -547,6 +673,14 @@ const HardwareManager: React.FC = () => {
                     <span className="text-slate-500 uppercase">Model:</span>
                     <span className="font-bold text-slate-900">
                       {boardModelLabel || boardModel}
+                    </span>
+                  </div>
+                )}
+                {board === 'raspberry_pi' && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-500 uppercase">Model:</span>
+                    <span className="font-bold text-slate-900">
+                      {rpiModelLabel || rpiBoardModel}
                     </span>
                   </div>
                 )}
