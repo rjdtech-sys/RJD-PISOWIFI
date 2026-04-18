@@ -37,7 +37,7 @@ const LandingPage: React.FC<Props> = ({ rates, sessions, onSessionStart, refresh
   const [creditPesos, setCreditPesos] = useState(0);
   const [creditMinutes, setCreditMinutes] = useState(0);
   const [userHasSelectedSlot, setUserHasSelectedSlot] = useState(false);
-  const [freeInternetConfig, setFreeInternetConfig] = useState<{ enabled: boolean; minutes: number; message: string }>({ enabled: false, minutes: 0, message: '' });
+  const [freeInternetConfig, setFreeInternetConfig] = useState<{ enabled: boolean; minutes: number; message: string; cooldownDays: number }>({ enabled: false, minutes: 0, message: '', cooldownDays: 1 });
   const [isClaimingFreeInternet, setIsClaimingFreeInternet] = useState(false);
   const [freeInternetError, setFreeInternetError] = useState<string | null>(null);
 
@@ -858,13 +858,13 @@ const LandingPage: React.FC<Props> = ({ rates, sessions, onSessionStart, refresh
                 </>
               ) : (
                 <>
-                  <span>✨</span> Claim Free Internet ({freeInternetConfig.minutes} mins)
+                  <span>✨</span> Claim Free Internet ({freeInternetConfig.minutes} mins / {freeInternetConfig.cooldownDays}d cooldown)
                 </>
               )}
             </button>
             
             <div className="mt-3 text-xs text-green-600 text-center">
-              <p>One claim per device per day</p>
+              <p>One claim per device every {freeInternetConfig.cooldownDays} day{freeInternetConfig.cooldownDays > 1 ? 's' : ''}</p>
             </div>
           </div>
         )}

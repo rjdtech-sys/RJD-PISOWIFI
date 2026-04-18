@@ -25,10 +25,11 @@ const PortalEditor: React.FC = () => {
     ip: ''
   });
   const [centralPortalDirty, setCentralPortalDirty] = useState(false);
-  const [freeInternet, setFreeInternet] = useState<{ enabled: boolean; minutes: number; message: string }>({
+  const [freeInternet, setFreeInternet] = useState<{ enabled: boolean; minutes: number; message: string; cooldownDays: number }>({
     enabled: false,
     minutes: 0,
-    message: ''
+    message: '',
+    cooldownDays: 1
   });
   const [freeInternetDirty, setFreeInternetDirty] = useState(false);
   const [audioFiles, setAudioFiles] = useState<AudioFile[]>([]);
@@ -53,7 +54,8 @@ const PortalEditor: React.FC = () => {
       setFreeInternet({
         enabled: cfg.enabled || false,
         minutes: cfg.minutes || 0,
-        message: cfg.message || ''
+        message: cfg.message || '',
+        cooldownDays: cfg.cooldownDays || 1
       });
       setFreeInternetDirty(false);
     }).catch(() => {});
@@ -586,7 +588,7 @@ const PortalEditor: React.FC = () => {
                   <span>🎁</span> Free Internet Promo
                 </div>
                 <p className="text-[9px] text-green-600">
-                  Bigyan ang mga client ng libreng internet bawat araw. One claim per device per day.
+                  Bigyan ang mga client ng libreng internet. May cooldown per device bago makapag-claim ulit.
                 </p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
@@ -604,7 +606,7 @@ const PortalEditor: React.FC = () => {
             </div>
 
             <div className={`space-y-3 ${freeInternet.enabled ? '' : 'opacity-50 pointer-events-none'}`}>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-[8px] font-black text-green-700 uppercase tracking-widest mb-1">
                     Minutes to Give
@@ -625,6 +627,25 @@ const PortalEditor: React.FC = () => {
                 </div>
                 <div>
                   <label className="block text-[8px] font-black text-green-700 uppercase tracking-widest mb-1">
+                    Cooldown (Days)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="365"
+                    value={freeInternet.cooldownDays}
+                    onChange={(e) => {
+                      setFreeInternet(prev => ({ ...prev, cooldownDays: parseInt(e.target.value, 10) || 1 }));
+                      setFreeInternetDirty(true);
+                    }}
+                    placeholder="Hal. 3 para sa 3 days cooldown"
+                    className="w-full bg-white border border-green-200 rounded-lg px-3 py-2 text-[10px] font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-green-500"
+                    disabled={!freeInternet.enabled}
+                  />
+                  <p className="text-[7px] text-green-600 mt-1">Ilang araw bago makapag-claim ulit ang device</p>
+                </div>
+                <div>
+                  <label className="block text-[8px] font-black text-green-700 uppercase tracking-widest mb-1">
                     Custom Message (Optional)
                   </label>
                   <input
@@ -642,7 +663,7 @@ const PortalEditor: React.FC = () => {
               </div>
 
               <div className="bg-white/50 rounded-lg p-2 text-[9px] text-green-700">
-                <span className="font-black">Preview:</span> {freeInternet.message || `Get ${freeInternet.minutes} minutes of free internet today!`}
+                <span className="font-black">Preview:</span> {freeInternet.message || `Get ${freeInternet.minutes} mins free internet every ${freeInternet.cooldownDays} day${freeInternet.cooldownDays > 1 ? 's' : ''}!`}
               </div>
             </div>
 

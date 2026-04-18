@@ -1248,12 +1248,12 @@ export const apiClient = {
   },
 
   // Free Internet API
-  async getFreeInternetConfig(): Promise<{ enabled: boolean; minutes: number; message: string }> {
+  async getFreeInternetConfig(): Promise<{ enabled: boolean; minutes: number; message: string; cooldownDays: number }> {
     const res = await fetch(`${API_BASE}/free-internet/config`, { headers: getHeaders() });
     return handleResponse(res);
   },
 
-  async setFreeInternetConfig(config: { enabled: boolean; minutes: number; message: string }): Promise<{ success: boolean; config: any }> {
+  async setFreeInternetConfig(config: { enabled: boolean; minutes: number; message: string; cooldownDays: number }): Promise<{ success: boolean; config: any }> {
     const res = await fetch(`${API_BASE}/free-internet/config`, {
       method: 'POST',
       headers: getHeaders(),
@@ -1262,7 +1262,7 @@ export const apiClient = {
     return handleResponse(res);
   },
 
-  async claimFreeInternet(): Promise<{ success: boolean; minutes: number; message: string; token: string }> {
+  async claimFreeInternet(): Promise<{ success: boolean; minutes: number; message: string; token: string; cooldownDays: number }> {
     const res = await fetch(`${API_BASE}/free-internet/claim`, {
       method: 'POST',
       headers: getHeaders()

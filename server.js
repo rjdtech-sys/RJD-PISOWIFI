@@ -7432,7 +7432,7 @@ function startBackgroundTimers() {
 app.get('/api/free-internet/config', async (req, res) => {
   try {
     const config = await db.get('SELECT value FROM config WHERE key = ?', ['free_internet_config']);
-    const defaultConfig = { enabled: false, minutes: 0, message: '' };
+    const defaultConfig = { enabled: false, minutes: 0, message: '', cooldownDays: 1 };
     res.json(config?.value ? JSON.parse(config.value) : defaultConfig);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -7442,11 +7442,12 @@ app.get('/api/free-internet/config', async (req, res) => {
 // Update free internet config (admin only)
 app.post('/api/free-internet/config', requireAdmin, async (req, res) => {
   try {
-    const { enabled, minutes, message } = req.body;
+    const { enabled, minutes, message, cooldownDays } = req.body;
     const config = {
       enabled: enabled === true,
       minutes: parseInt(minutes, 10) || 0,
-      message: message || ''
+      message: message || '',
+      cooldownDays: Math.max(1, parseInt(cooldownDays, 10) || 1)
     };
     await db.run('INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)', ['free_internet_config', JSON.stringify(config)]);
     res.json({ success: true, config });
@@ -7460,7 +7461,7 @@ app.post('/api/free-internet/claim', async (req, res) => {
   try {
     // Get free internet config
     const config = await db.get('SELECT value FROM config WHERE key = ?', ['free_internet_config']);
-    const freeConfig = config?.value ? JSON.parse(config.value) : { enabled: false, minutes: 0 };
+    const freeConfig = config?.value ? JSON.parse(config.value) : { enabled: false, minutes: 0, cooldownDays: 1 };
 
     if (!freeConfig.enabled || freeConfig.minutes <= 0) {
       return res.status(400).json({ error: 'Free internet is not available at this time.' });
@@ -7476,14 +7477,33 @@ app.post('/api/free-internet/claim', async (req, res) => {
       return res.status(400).json({ error: 'Could not identify your device. Please reconnect to WiFi.' });
     }
 
-    // Check if already claimed today
-    const today = new Date().toISOString().split('T')[0];
-    const claimedKey = `free_internet_claimed_${today}`;
-    const claimedConfig = await db.get('SELECT value FROM config WHERE key = ?', [claimedKey]);
-    const claimedMacs = claimedConfig?.value ? JSON.parse(claimedConfig.value) : [];
+    // Check cooldown: look up last claim timestamp for this MAC
+    const cooldownDays = Math.max(1, freeConfig.cooldownDays || 1);
+    const lastClaimKey = `free_internet_last_claim_${mac.toUpperCase()}`;
+    const lastClaimRow = await db.get('SELECT value FROM config WHERE key = ?', [lastClaimKey]);
 
-    if (claimedMacs.includes(mac)) {
-      return res.status(400).json({ error: 'You have already claimed your free internet for today.' });
+    if (lastClaimRow && lastClaimRow.value) {
+      const lastClaimTime = parseInt(lastClaimRow.value, 10);
+      const cooldownMs = cooldownDays * 24 * 60 * 60 * 1000;
+      const nextAvailableTime = lastClaimTime + cooldownMs;
+      const now = Date.now();
+
+      if (now < nextAvailableTime) {
+        const remainingMs = nextAvailableTime - now;
+        const remainingDays = Math.ceil(remainingMs / (24 * 60 * 60 * 1000));
+        const remainingHours = Math.ceil(remainingMs / (60 * 60 * 1000));
+        let waitMessage = '';
+        if (remainingDays > 1) {
+          waitMessage = `You can claim free internet again in ${remainingDays} days.`;
+        } else {
+          waitMessage = `You can claim free internet again in ${remainingHours} hour${remainingHours !== 1 ? 's' : ''}.`;
+        }
+        return res.status(400).json({
+          error: waitMessage,
+          nextAvailableAt: nextAvailableTime,
+          cooldownDays: cooldownDays
+        });
+      }
     }
 
     // Create session for free internet
@@ -7516,15 +7536,15 @@ app.post('/api/free-internet/claim', async (req, res) => {
       );
     }
 
-    // Mark as claimed
-    claimedMacs.push(mac);
-    await db.run('INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)', [claimedKey, JSON.stringify(claimedMacs)]);
+    // Mark as claimed - store timestamp per MAC
+    await db.run('INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)', [lastClaimKey, String(Date.now())]);
 
     res.json({
       success: true,
       minutes: freeConfig.minutes,
       message: freeConfig.message || 'Enjoy your free internet!',
-      token: existingSession ? existingSession.token : token
+      token: existingSession ? existingSession.token : token,
+      cooldownDays: cooldownDays
     });
   } catch (err) {
     console.error('[FreeInternet] Error:', err);
