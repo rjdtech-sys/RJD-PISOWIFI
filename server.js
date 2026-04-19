@@ -7296,6 +7296,9 @@ function startBackgroundTimers() {
 
           console.log(`[PPPoE-Expire] Kicking active connection for expired user "${u.username}"...`);
           await network.disconnectPPPoEUser(u.username).catch(() => {});
+          
+          // Clear the user's IP address so they get a new one on reconnect
+          await db.run('UPDATE pppoe_users SET ip_address = NULL WHERE id = ?', [u.id]).catch(() => {});
 
           const existingInvoice = await db.get(
             'SELECT id FROM pppoe_invoices WHERE user_id = ? AND expires_at = ? LIMIT 1',
@@ -7376,6 +7379,21 @@ function startBackgroundTimers() {
 
   setInterval(() => { processExpiredPPPoEUsers(); }, 15000);
   processExpiredPPPoEUsers();
+
+  // Periodic refresh of iptables rules for expired users (when no expired pool is configured)
+  const refreshExpiredUserFirewallRules = async () => {
+    try {
+      const { pool } = await network.getPPPoEExpiredSettings().catch(() => ({ pool: null }));
+      // Only apply if no expired pool is configured (we handle this via iptables)
+      if (!pool || !pool.ip_pool_start || !pool.ip_pool_end) {
+        await network.initFirewall().catch(() => {});
+      }
+    } catch (e) {
+      console.error('[PPPoE-Expire] Firewall refresh failed:', e.message);
+    }
+  };
+  setInterval(refreshExpiredUserFirewallRules, 30000);
+  refreshExpiredUserFirewallRules();
 
   const syncPPPoEUserPresence = async () => {
     try {
