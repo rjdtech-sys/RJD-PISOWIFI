@@ -566,7 +566,22 @@ const SalesInventory: React.FC<{ sessions: UserSession[] }> = ({ sessions }) => 
   const [showOldestFirst, setShowOldestFirst] = useState<boolean>(false);
   const [showPaymentsBreakdown, setShowPaymentsBreakdown] = useState<boolean>(false);
   const [showNotCredited, setShowNotCredited] = useState<boolean>(false);
+  
+  // New state for sales inventory data from API
+  const [salesData, setSalesData] = useState<{
+    sales: any[];
+    coinslots: string[];
+    totals: Record<string, { amount: number; count: number }>;
+    grandTotal: { amount: number; count: number };
+  }>({
+    sales: [],
+    coinslots: [],
+    totals: {},
+    grandTotal: { amount: 0, count: 0 }
+  });
+  const [salesLoading, setSalesLoading] = useState<boolean>(false);
 
+  // Load NodeMCU devices
   useEffect(() => {
     let cancelled = false;
     const loadDevices = async () => {
@@ -584,6 +599,35 @@ const SalesInventory: React.FC<{ sessions: UserSession[] }> = ({ sessions }) => 
       cancelled = true;
     };
   }, []);
+
+  // Load sales data from API
+  useEffect(() => {
+    let cancelled = false;
+    const loadSalesData = async () => {
+      try {
+        setSalesLoading(true);
+        const data = await apiClient.getSalesInventory({
+          from: fromDate,
+          to: toDate,
+          coinslot: coinSlotFilter,
+          type: typeFilter
+        });
+        if (!cancelled) {
+          setSalesData(data);
+        }
+      } catch (e) {
+        console.error('Failed to load sales inventory data:', e);
+      } finally {
+        if (!cancelled) {
+          setSalesLoading(false);
+        }
+      }
+    };
+    loadSalesData();
+    return () => {
+      cancelled = true;
+    };
+  }, [fromDate, toDate, coinSlotFilter, typeFilter]);
 
   const applyDatePreset = (preset: string) => {
     const now = new Date();
@@ -626,100 +670,87 @@ const SalesInventory: React.FC<{ sessions: UserSession[] }> = ({ sessions }) => 
     setToDate(to);
   };
 
-  const parseDate = (value: string) => new Date(value + 'T00:00:00');
+  // Get coinslot label from MAC address
+  const getCoinSlotLabel = (machineId: string) => {
+    if (!machineId || machineId === 'main') return 'MAIN';
+    const device = nodeMcuDevices.find(d => d.macAddress.toUpperCase() === machineId.toUpperCase());
+    return device?.name || machineId;
+  };
 
-  const enhancedSessions = useMemo(() => {
-    const findSlotLabel = (slotKey: string) => {
-      if (!slotKey || slotKey === 'main') return 'MAIN';
-      const device = nodeMcuDevices.find(d => d.macAddress.toUpperCase() === slotKey.toUpperCase());
-      if (device) return device.name || device.macAddress || slotKey;
-      return slotKey;
-    };
-
-    return sessions.map((s) => {
-      const rawCreatedAt = (s as any).connectedAt || (s as any).createdAt || new Date().toISOString();
-      const createdAt = new Date(rawCreatedAt).toISOString();
-
-      const type = 'coin';
-      const slotKey = (s as any).coinSlot || 'main';
-      const coinSlotLabel = findSlotLabel(slotKey);
-      const mac = s.mac || (s as any).customer_mac || '';
-      const account = (s as any).account || '';
-      const customer = (s as any).customer || '';
-      const device = (s as any).device || '';
-      return {
-        ...s,
-        __createdAt: createdAt,
-        __type: type,
-        __coinSlotKey: slotKey as string,
-        __coinSlotLabel: coinSlotLabel,
-        __mac: mac as string,
-        __account: account as string,
-        __customer: customer as string,
-        __device: device as string,
-      };
-    });
-  }, [sessions, nodeMcuDevices]);
-
-  const filtered = useMemo(() => {
-    const from = parseDate(fromDate);
-    const to = parseDate(toDate);
-    const upperSearch = searchTerm.trim().toUpperCase();
-
-    const rows: any[] = [...enhancedSessions];
-
-    let result = rows.filter((s: any) => {
-      const created = new Date(s.__createdAt);
-      if (created < from || created > new Date(to.getTime() + 24 * 60 * 60 * 1000 - 1)) return false;
-      if (typeFilter !== 'all' && s.__type !== typeFilter) return false;
-      if (coinSlotFilter !== 'all' && s.__coinSlotKey !== coinSlotFilter) return false;
-      if (upperSearch) {
-        const mac = (s.__mac || '').toUpperCase();
-        const account = (s.__account || '').toUpperCase();
-        if (!mac.includes(upperSearch) && !account.includes(upperSearch)) return false;
-      }
-      return true;
-    });
-
+  // Filter and sort sales data
+  const filteredSales = useMemo(() => {
+    let result = [...salesData.sales];
+    
+    // Apply search filter
+    if (searchTerm.trim()) {
+      const upperSearch = searchTerm.trim().toUpperCase();
+      result = result.filter((s: any) => {
+        const mac = (s.mac || '').toUpperCase();
+        const machineId = (s.machineId || '').toUpperCase();
+        return mac.includes(upperSearch) || machineId.includes(upperSearch);
+      });
+    }
+    
+    // Sort
     result = result.sort((a: any, b: any) => {
-      const da = new Date(a.__createdAt).getTime();
-      const db = new Date(b.__createdAt).getTime();
+      const da = new Date(a.createdAt).getTime();
+      const db = new Date(b.createdAt).getTime();
       return showOldestFirst ? da - db : db - da;
     });
-
+    
     return result;
-  }, [enhancedSessions, nodeMcuDevices, fromDate, toDate, typeFilter, coinSlotFilter, searchTerm, showOldestFirst]);
+  }, [salesData.sales, searchTerm, showOldestFirst]);
 
+  const paginated = useMemo(() => filteredSales.slice(0, itemsPerPage), [filteredSales, itemsPerPage]);
+
+  // Calculate total sales for the selected date range
+  const totalSalesSelected = useMemo(() => {
+    if (coinSlotFilter === 'all') {
+      return salesData.grandTotal.amount;
+    }
+    return salesData.totals[coinSlotFilter]?.amount || 0;
+  }, [salesData, coinSlotFilter]);
+
+  // Calculate today's total sales
   const totalSalesToday = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
-    return enhancedSessions
+    return salesData.sales
       .filter((s: any) => {
         try {
-          return new Date(s.__createdAt).toISOString().slice(0, 10) === today;
+          return new Date(s.createdAt).toISOString().slice(0, 10) === today;
         } catch {
           return false;
         }
       })
-      .reduce((sum: number, s: any) => sum + (s.totalPaid || 0), 0);
-  }, [enhancedSessions]);
+      .reduce((sum: number, s: any) => sum + (s.amount || 0), 0);
+  }, [salesData.sales]);
 
-  const paginated = useMemo(() => filtered.slice(0, itemsPerPage), [filtered, itemsPerPage]);
-
+  // Build unique coinslots list with labels
   const uniqueCoinSlots = useMemo(() => {
     const map = new Map<string, string>();
     map.set('main', 'MAIN');
+    map.set('all', 'All Coinslots');
+    
+    // Add NodeMCU devices
     nodeMcuDevices.forEach((d) => {
       map.set(d.macAddress, d.name || d.macAddress);
     });
-    enhancedSessions.forEach((s: any) => {
-      const key = s.__coinSlotKey;
-      const label = s.__coinSlotLabel || key;
-      if (key) {
-        map.set(key, label);
+    
+    // Add coinslots from sales data
+    salesData.coinslots.forEach((machineId) => {
+      if (!map.has(machineId)) {
+        map.set(machineId, getCoinSlotLabel(machineId));
       }
     });
-    return Array.from(map.entries()).map(([key, label]) => ({ key, label }));
-  }, [nodeMcuDevices, enhancedSessions]);
+    
+    return Array.from(map.entries())
+      .filter(([key]) => key !== 'all') // Remove the 'all' entry for individual options
+      .map(([key, label]) => ({ 
+        key, 
+        label,
+        total: salesData.totals[key]?.amount || 0
+      }));
+  }, [nodeMcuDevices, salesData]);
 
   useEffect(() => {
     applyDatePreset(datePreset);
@@ -732,11 +763,21 @@ const SalesInventory: React.FC<{ sessions: UserSession[] }> = ({ sessions }) => 
           <h1 className="text-xl font-black text-slate-900 uppercase tracking-tight">Sales Inventory</h1>
           <p className="text-xs text-slate-500">Monitor all sales by coinslot, type, and date.</p>
         </div>
-        <div className="bg-white rounded-2xl px-5 py-3 shadow-sm border border-slate-100 flex items-baseline gap-3">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Sales Today</span>
-          <span className="text-2xl font-black text-emerald-600">
-            ₱{totalSalesToday.toFixed(2)}
-          </span>
+        <div className="flex flex-col gap-2">
+          {/* TOTAL SALES - Main + NodeMCU */}
+          <div className="bg-gradient-to-r from-emerald-500 to-teal-600 rounded-2xl px-5 py-3 shadow-sm border border-emerald-400 flex items-baseline gap-3">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-100">Total Sales (All Coinslots)</span>
+            <span className="text-2xl font-black text-white">
+              ₱{salesData.grandTotal.amount.toFixed(2)}
+            </span>
+          </div>
+          {/* Sales Today */}
+          <div className="bg-white rounded-xl px-4 py-2 shadow-sm border border-slate-100 flex items-baseline gap-3">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Sales Today</span>
+            <span className="text-lg font-black text-emerald-600">
+              ₱{totalSalesToday.toFixed(2)}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -800,9 +841,11 @@ const SalesInventory: React.FC<{ sessions: UserSession[] }> = ({ sessions }) => 
               onChange={(e) => setCoinSlotFilter(e.target.value)}
               className="w-full admin-input text-xs"
             >
-              <option value="all">All Coinslots</option>
+              <option value="all">All Coinslots (₱{salesData.grandTotal.amount.toFixed(2)})</option>
               {uniqueCoinSlots.map((slot) => (
-                <option key={slot.key} value={slot.key}>{slot.label}</option>
+                <option key={slot.key} value={slot.key}>
+                  {slot.label} (₱{(slot.total || 0).toFixed(2)})
+                </option>
               ))}
             </select>
           </div>
@@ -885,39 +928,44 @@ const SalesInventory: React.FC<{ sessions: UserSession[] }> = ({ sessions }) => 
                 <th className="px-4 py-2 text-left font-bold">Amount</th>
                 <th className="px-4 py-2 text-left font-bold">Type</th>
                 <th className="px-4 py-2 text-left font-bold">Coinslot</th>
-                <th className="px-4 py-2 text-left font-bold">Customer</th>
-                <th className="px-4 py-2 text-left font-bold">Device</th>
                 <th className="px-4 py-2 text-left font-bold">MAC</th>
-                <th className="px-4 py-2 text-left font-bold">Account / Phone</th>
+                <th className="px-4 py-2 text-left font-bold">IP</th>
                 <th className="px-4 py-2 text-left font-bold">Date</th>
               </tr>
             </thead>
             <tbody>
-              {paginated.length === 0 && (
+              {salesLoading && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-6 text-center text-[11px] text-slate-400">
+                  <td colSpan={6} className="px-4 py-6 text-center text-[11px] text-slate-400">
+                    Loading sales data...
+                  </td>
+                </tr>
+              )}
+              {!salesLoading && paginated.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-6 text-center text-[11px] text-slate-400">
                     Walang nahanap na sales sa napiling filter.
                   </td>
                 </tr>
               )}
-              {paginated.map((s: any, idx: number) => (
+              {!salesLoading && paginated.map((s: any, idx: number) => (
                 <tr
-                  key={(s.mac || s.__mac || 'row') + idx}
+                  key={(s.id || s.mac || 'row') + idx}
                   className="border-b border-slate-50 hover:bg-slate-50/60"
                 >
                   <td className="px-4 py-2 font-semibold text-slate-800">
-                    ₱{(s.totalPaid || 0).toFixed(2)}
+                    ₱{(s.amount || 0).toFixed(2)}
                   </td>
                   <td className="px-4 py-2 text-[11px] font-semibold">
-                    {s.__type === 'coin' && <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">Coin</span>}
+                    {s.type === 'coin' && <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">Coin</span>}
+                    {s.type === 'voucher' && <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">Voucher</span>}
+                    {!s.type && <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-50 text-gray-700 border border-gray-200">-</span>}
                   </td>
-                  <td className="px-4 py-2 text-[11px] text-slate-700">{s.__coinSlot}</td>
-                  <td className="px-4 py-2 text-[11px] text-slate-700">{s.__customer || 'N/A'}</td>
-                  <td className="px-4 py-2 text-[11px] text-slate-700">{s.__device || 'N/A'}</td>
-                  <td className="px-4 py-2 text-[11px] font-mono text-slate-700">{s.__mac || 'N/A'}</td>
-                  <td className="px-4 py-2 text-[11px] text-slate-700">{s.__account || 'N/A'}</td>
+                  <td className="px-4 py-2 text-[11px] text-slate-700">{getCoinSlotLabel(s.machineId)}</td>
+                  <td className="px-4 py-2 text-[11px] font-mono text-slate-700">{s.mac || 'N/A'}</td>
+                  <td className="px-4 py-2 text-[11px] text-slate-700">{s.ip || 'N/A'}</td>
                   <td className="px-4 py-2 text-[11px] text-slate-600">
-                    {new Date(s.__createdAt).toLocaleString()}
+                    {s.createdAt ? new Date(s.createdAt).toLocaleString() : 'N/A'}
                   </td>
                 </tr>
               ))}

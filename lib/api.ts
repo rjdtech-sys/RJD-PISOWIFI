@@ -597,6 +597,25 @@ export const apiClient = {
     return handleResponse(res);
   },
 
+  async getSalesInventory(params?: { from?: string; to?: string; coinslot?: string; type?: string }): Promise<{
+    sales: any[];
+    coinslots: string[];
+    totals: Record<string, { amount: number; count: number }>;
+    grandTotal: { amount: number; count: number };
+  }> {
+    const queryParams = new URLSearchParams();
+    if (params?.from) queryParams.append('from', params.from);
+    if (params?.to) queryParams.append('to', params.to);
+    if (params?.coinslot) queryParams.append('coinslot', params.coinslot);
+    if (params?.type) queryParams.append('type', params.type);
+    
+    const queryString = queryParams.toString();
+    const url = `${API_BASE}/sales/inventory${queryString ? `?${queryString}` : ''}`;
+    
+    const res = await fetch(url, { headers: getHeaders() });
+    return handleResponse(res);
+  },
+
   async pauseSession(token: string): Promise<{ success: boolean; message: string }> {
     const res = await fetch(`${API_BASE}/sessions/pause`, {
       method: 'POST',

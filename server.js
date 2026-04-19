@@ -3068,6 +3068,91 @@ app.get('/api/sales/history', requireAdmin, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// NEW: Get comprehensive sales data for Sales Inventory page
+app.get('/api/sales/inventory', requireAdmin, async (req, res) => {
+  try {
+    const { from, to, coinslot, type } = req.query;
+    
+    // Build the WHERE clause
+    let whereClause = 'WHERE type != "coins_out"'; // Exclude coins_out transactions
+    const params = [];
+    
+    if (from) {
+      whereClause += ' AND date(timestamp) >= date(?)';
+      params.push(from);
+    }
+    if (to) {
+      whereClause += ' AND date(timestamp) <= date(?)';
+      params.push(to);
+    }
+    if (coinslot && coinslot !== 'all') {
+      whereClause += ' AND machine_id = ?';
+      params.push(coinslot);
+    }
+    if (type && type !== 'all') {
+      whereClause += ' AND type = ?';
+      params.push(type);
+    }
+    
+    // Get sales records
+    const salesQuery = `SELECT 
+      id,
+      mac,
+      ip,
+      amount,
+      minutes,
+      type,
+      timestamp as createdAt,
+      machine_id as machineId
+    FROM sales 
+    ${whereClause}
+    ORDER BY timestamp DESC`;
+    
+    const sales = await db.all(salesQuery, params);
+    
+    // Get unique coinslots (machine_ids)
+    const coinslotsQuery = `SELECT DISTINCT machine_id as machineId FROM sales WHERE machine_id IS NOT NULL ORDER BY machine_id`;
+    const coinslots = await db.all(coinslotsQuery);
+    
+    // Calculate totals per coinslot
+    const totalsQuery = `SELECT 
+      machine_id as machineId,
+      SUM(amount) as totalAmount,
+      COUNT(*) as transactionCount
+    FROM sales 
+    WHERE type != "coins_out"
+    GROUP BY machine_id`;
+    const totals = await db.all(totalsQuery);
+    
+    // Calculate grand total
+    const grandTotalQuery = `SELECT 
+      SUM(amount) as grandTotal,
+      COUNT(*) as totalTransactions
+    FROM sales 
+    WHERE type != "coins_out"`;
+    const grandTotal = await db.get(grandTotalQuery);
+    
+    res.json({
+      sales,
+      coinslots: coinslots.map(c => c.machineId),
+      totals: totals.reduce((acc, t) => {
+        acc[t.machineId] = {
+          amount: t.totalAmount || 0,
+          count: t.transactionCount || 0
+        };
+        return acc;
+      }, {}),
+      grandTotal: {
+        amount: grandTotal?.grandTotal || 0,
+        count: grandTotal?.totalTransactions || 0
+      }
+    });
+  } catch (err) { 
+    console.error('[Sales Inventory API Error]:', err);
+    res.status(500).json({ error: err.message }); 
+  }
+});
+
 // COINS OUT API for MAIN MACHINE
 app.post('/api/admin/coinsout', requireAdmin, async (req, res) => {
   try {
