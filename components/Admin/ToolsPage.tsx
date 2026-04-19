@@ -1,6 +1,21 @@
 import React, { useState, useEffect, useCallback } from 'react';
 
-export type ToolsSubPage = 'speedtest' | 'dhcp_leases';
+export type ToolsSubPage = 'speedtest' | 'dhcp_leases' | 'terminal';
+
+interface TerminalInfo {
+  hostname: string;
+  username: string;
+  cwd: string;
+  shell: string;
+}
+
+interface TerminalOutput {
+  success: boolean;
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+  command: string;
+}
 
 interface SpeedTestResult {
   success: boolean;
@@ -39,7 +54,8 @@ type TestPhase = 'idle' | 'testing' | 'done' | 'error';
 // Sub-page selector tabs
 const subPageItems: { id: ToolsSubPage; label: string; icon: string }[] = [
   { id: 'speedtest', label: 'Speedtest', icon: '⚡' },
-  { id: 'dhcp_leases', label: 'DHCP Leases', icon: '📋' }
+  { id: 'dhcp_leases', label: 'DHCP Leases', icon: '📋' },
+  { id: 'terminal', label: 'Terminal', icon: '💻' }
 ];
 
 const ToolsPage: React.FC = () => {
@@ -77,6 +93,7 @@ const ToolsPage: React.FC = () => {
       {/* Sub-page Content */}
       {subPage === 'speedtest' && <SpeedtestSubPage />}
       {subPage === 'dhcp_leases' && <DhcpLeasesSubPage />}
+      {subPage === 'terminal' && <TerminalSubPage />}
     </div>
   );
 };
@@ -751,6 +768,235 @@ const DhcpLeasesSubPage: React.FC = () => {
             </span>
             <span className="text-[9px] text-slate-400">
               {filtered.length} of {leases.length} shown
+            </span>
+          </div>
+        </div>
+      </div>
+      </>
+  );
+};
+
+/* =====================================================
+   TERMINAL SUB-PAGE (SSH CLI)
+   ===================================================== */
+const TerminalSubPage: React.FC = () => {
+  const [info, setInfo] = useState<TerminalInfo | null>(null);
+  const [command, setCommand] = useState('');
+  const [history, setHistory] = useState<TerminalOutput[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const terminalEndRef = React.useRef<HTMLDivElement>(null);
+
+  // Fetch terminal info on mount
+  useEffect(() => {
+    const fetchInfo = async () => {
+      try {
+        const token = localStorage.getItem('ajc_admin_token');
+        const res = await fetch('/api/terminal/info', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setInfo(data);
+        }
+      } catch (e) {
+        console.error('Failed to fetch terminal info:', e);
+      }
+    };
+    fetchInfo();
+  }, []);
+
+  // Auto-scroll to bottom
+  useEffect(() => {
+    terminalEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [history]);
+
+  const executeCommand = async () => {
+    if (!command.trim()) return;
+    
+    setLoading(true);
+    setError(null);
+    
+    const cmdToExecute = command.trim();
+    setCommand(''); // Clear input immediately for better UX
+    
+    try {
+      const token = localStorage.getItem('ajc_admin_token');
+      const res = await fetch('/api/terminal/exec', {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ command: cmdToExecute })
+      });
+      
+      const data = await res.json();
+      
+      setHistory(prev => [...prev, {
+        success: data.success,
+        stdout: data.stdout,
+        stderr: data.stderr,
+        exitCode: data.exitCode,
+        command: cmdToExecute
+      }]);
+    } catch (e: any) {
+      setHistory(prev => [...prev, {
+        success: false,
+        stdout: '',
+        stderr: e.message || 'Failed to execute command',
+        exitCode: 1,
+        command: cmdToExecute
+      }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      executeCommand();
+    }
+  };
+
+  const clearHistory = () => {
+    setHistory([]);
+  };
+
+  const quickCommands = [
+    { label: 'pwd', cmd: 'pwd' },
+    { label: 'ls -la', cmd: 'ls -la' },
+    { label: 'df -h', cmd: 'df -h' },
+    { label: 'free -m', cmd: 'free -m' },
+    { label: 'uptime', cmd: 'uptime' },
+    { label: 'whoami', cmd: 'whoami' },
+    { label: 'ip addr', cmd: 'ip addr' },
+    { label: 'top -bn1 | head', cmd: 'top -bn1 | head -20' },
+  ];
+
+  return (
+      <>{/* Terminal Card */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+        {/* Card Header */}
+        <div className="px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-slate-700 to-slate-900 rounded-xl flex items-center justify-center shadow-lg shadow-slate-500/20">
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-sm font-black text-slate-900 uppercase tracking-tight">SSH Terminal</h2>
+                <p className="text-[10px] text-slate-500 uppercase tracking-wider">
+                  {info ? `${info.username}@${info.hostname}:${info.cwd}` : 'Connecting...'}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={clearHistory}
+                disabled={history.length === 0 || loading}
+                className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-bold uppercase tracking-wider transition-colors disabled:opacity-50"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Quick Commands */}
+        <div className="px-6 py-3 border-b border-slate-100 bg-slate-50/50">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mr-2">Quick:</span>
+            {quickCommands.map((qc) => (
+              <button
+                key={qc.label}
+                onClick={() => {
+                  setCommand(qc.cmd);
+                }}
+                disabled={loading}
+                className="px-2.5 py-1 rounded-md bg-white border border-slate-200 text-[10px] font-semibold text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-colors disabled:opacity-50"
+              >
+                {qc.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Terminal Output */}
+        <div className="bg-slate-900 p-4 min-h-[300px] max-h-[500px] overflow-y-auto font-mono text-xs">
+          {/* Welcome Message */}
+          {history.length === 0 && (
+            <div className="text-slate-400 mb-4">
+              <p className="text-green-400">Welcome to AJC PisoWiFi Terminal</p>
+              <p className="mt-1">Type commands to execute on the local machine.</p>
+              <p className="text-slate-500 mt-1">Note: Some dangerous commands are blocked for security.</p>
+            </div>
+          )}
+
+          {/* Command History */}
+          {history.map((entry, idx) => (
+            <div key={idx} className="mb-4">
+              {/* Command Prompt */}
+              <div className="flex items-center gap-2 text-green-400">
+                <span className="text-slate-500">$</span>
+                <span>{entry.command}</span>
+              </div>
+              
+              {/* Output */}
+              {entry.stdout && (
+                <div className="text-slate-200 whitespace-pre-wrap mt-1 ml-4">
+                  {entry.stdout}
+                </div>
+              )}
+              
+              {/* Error */}
+              {entry.stderr && (
+                <div className="text-red-400 whitespace-pre-wrap mt-1 ml-4">
+                  {entry.stderr}
+                </div>
+              )}
+              
+              {/* Exit Code */}
+              {entry.exitCode !== 0 && (
+                <div className="text-amber-400 text-[10px] mt-1 ml-4">
+                  Exit code: {entry.exitCode}
+                </div>
+              )}
+            </div>
+          ))}
+
+          {/* Current Input Line */}
+          <div className="flex items-center gap-2">
+            <span className="text-green-400">$</span>
+            <input
+              type="text"
+              value={command}
+              onChange={(e) => setCommand(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={loading}
+              placeholder={loading ? 'Executing...' : 'Type command...'}
+              className="flex-1 bg-transparent text-slate-200 outline-none font-mono text-xs placeholder-slate-600"
+              autoFocus
+            />
+            {loading && (
+              <span className="text-slate-500 animate-pulse">...</span>
+            )}
+          </div>
+
+          <div ref={terminalEndRef} />
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-3 bg-slate-50 border-t border-slate-100">
+          <div className="flex items-center justify-between">
+            <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">
+              Press Enter to execute • Some commands are blocked for security
+            </span>
+            <span className="text-[9px] text-slate-400">
+              {history.length} command{history.length !== 1 ? 's' : ''} executed
             </span>
           </div>
         </div>

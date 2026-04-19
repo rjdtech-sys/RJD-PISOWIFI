@@ -7931,6 +7931,86 @@ app.post('/api/speedtest/install', requireAdmin, async (req, res) => {
   }
 });
 
+// ==========================================
+// SSH TERMINAL API (Local Machine CLI)
+// ==========================================
+
+// Execute SSH command on the local machine
+app.post('/api/terminal/exec', requireAdmin, async (req, res) => {
+  try {
+    const { command } = req.body;
+    
+    if (!command || typeof command !== 'string') {
+      return res.status(400).json({ error: 'Command is required' });
+    }
+
+    // Security: Block dangerous commands
+    const dangerousPatterns = [
+      /rm\s+-rf\s+\//i,
+      />\s*\/dev\/null/i,
+      /mkfs\./i,
+      /dd\s+if=/i,
+      /:\(\)\s*\{\s*:\|:\s*&\s*\};/i, // Fork bomb
+    ];
+    
+    for (const pattern of dangerousPatterns) {
+      if (pattern.test(command)) {
+        return res.status(403).json({ 
+          error: 'Command blocked for security reasons',
+          stdout: '',
+          stderr: 'This command is not allowed',
+          exitCode: 1
+        });
+      }
+    }
+
+    // Execute command with timeout
+    const { stdout, stderr } = await execPromise(command, { 
+      timeout: 30000,
+      maxBuffer: 1024 * 1024 // 1MB buffer
+    });
+
+    res.json({
+      success: true,
+      stdout: stdout || '',
+      stderr: stderr || '',
+      exitCode: 0,
+      command: command
+    });
+  } catch (err) {
+    // Command failed but we still return the output
+    res.json({
+      success: false,
+      stdout: err.stdout || '',
+      stderr: err.stderr || err.message,
+      exitCode: err.code || 1,
+      command: req.body.command
+    });
+  }
+});
+
+// Get system info for terminal (hostname, user, pwd)
+app.get('/api/terminal/info', requireAdmin, async (req, res) => {
+  try {
+    const hostname = require('os').hostname();
+    const username = process.env.USER || process.env.USERNAME || 'root';
+    
+    let cwd = '/';
+    try {
+      cwd = process.cwd();
+    } catch (e) {}
+
+    res.json({
+      hostname,
+      username,
+      cwd,
+      shell: process.env.SHELL || '/bin/bash'
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Catch-all route for frontend (must be last)
 app.get('*', (req, res) => {
   if (req.path.startsWith('/api') || req.path.startsWith('/dist')) return res.status(404).send('Not found');
