@@ -65,6 +65,7 @@ class StatusBarBlockerService : Service() {
 
     private var windowManager: WindowManager? = null
     private var overlayView: View? = null
+    private var navBarOverlayView: View? = null  // New: bottom navigation bar blocker
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -100,14 +101,18 @@ class StatusBarBlockerService : Service() {
         }
 
         try {
-            // Get screen width and status bar height
+            // Get screen dimensions
             val metrics = DisplayMetrics()
             @Suppress("DEPRECATION")
             windowManager?.defaultDisplay?.getMetrics(metrics)
             val screenWidth = metrics.widthPixels
+            val screenHeight = metrics.heightPixels
 
             // Status bar height (typically 24-32dp)
             val statusBarHeight = getStatusBarHeight()
+            
+            // Navigation bar height (typically 48dp)
+            val navBarHeight = getNavigationBarHeight()
 
             val overlayType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -116,9 +121,10 @@ class StatusBarBlockerService : Service() {
                 WindowManager.LayoutParams.TYPE_PHONE
             }
 
-            val params = WindowManager.LayoutParams(
+            // TOP overlay: Block status bar
+            val topParams = WindowManager.LayoutParams(
                 screenWidth,
-                statusBarHeight + 8, // A few extra pixels to ensure coverage
+                statusBarHeight + 8,
                 overlayType,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                     WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
@@ -131,33 +137,65 @@ class StatusBarBlockerService : Service() {
                 y = 0
             }
 
-            val blocker = View(this).apply {
-                // Completely transparent - invisible to user but intercepts touches
+            val topBlocker = View(this).apply {
                 setBackgroundColor(Color.TRANSPARENT)
-                setOnTouchListener { _, _ ->
-                    // Consume ALL touch events at the top of the screen
-                    // This prevents swipe-down from reaching the system notification shade
-                    true
-                }
+                setOnTouchListener { _, _ -> true } // Consume all touches
             }
 
-            windowManager?.addView(blocker, params)
-            overlayView = blocker
+            windowManager?.addView(topBlocker, topParams)
+            overlayView = topBlocker
             Log.i(TAG, "Status bar blocker overlay added (height: ${statusBarHeight + 8}px)")
+            
+            // BOTTOM overlay: Block navigation bar (HOME, Recent, Back buttons)
+            val bottomParams = WindowManager.LayoutParams(
+                screenWidth,
+                navBarHeight + 8,
+                overlayType,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                PixelFormat.TRANSLUCENT
+            ).apply {
+                gravity = Gravity.BOTTOM or Gravity.START
+                x = 0
+                y = 0
+            }
+
+            val bottomBlocker = View(this).apply {
+                setBackgroundColor(Color.TRANSPARENT)
+                setOnTouchListener { _, _ -> true } // Consume all touches
+            }
+
+            windowManager?.addView(bottomBlocker, bottomParams)
+            navBarOverlayView = bottomBlocker
+            Log.i(TAG, "Navigation bar blocker overlay added (height: ${navBarHeight + 8}px)")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to add overlay: ${e.message}", e)
         }
     }
 
     private fun removeOverlay() {
+        // Remove top overlay (status bar)
         overlayView?.let {
             try {
                 windowManager?.removeView(it)
                 Log.i(TAG, "Status bar blocker overlay removed")
             } catch (e: Exception) {
-                Log.w(TAG, "Error removing overlay: ${e.message}")
+                Log.w(TAG, "Error removing status bar overlay: ${e.message}")
             }
             overlayView = null
+        }
+        
+        // Remove bottom overlay (navigation bar)
+        navBarOverlayView?.let {
+            try {
+                windowManager?.removeView(it)
+                Log.i(TAG, "Navigation bar blocker overlay removed")
+            } catch (e: Exception) {
+                Log.w(TAG, "Error removing navigation bar overlay: ${e.message}")
+            }
+            navBarOverlayView = null
         }
     }
 
@@ -167,6 +205,15 @@ class StatusBarBlockerService : Service() {
             if (resId > 0) resources.getDimensionPixelSize(resId) else 80
         } catch (e: Exception) {
             80 // fallback ~25dp
+        }
+    }
+
+    private fun getNavigationBarHeight(): Int {
+        return try {
+            val resId = resources.getIdentifier("navigation_bar_height", "dimen", "android")
+            if (resId > 0) resources.getDimensionPixelSize(resId) else 120
+        } catch (e: Exception) {
+            120 // fallback ~48dp
         }
     }
 

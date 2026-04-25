@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { RentalDevice, RentalSession, RentalReport, PhoneRentalRate } from '../../types';
 import { apiClient } from '../../lib/api';
+import ApkInstallerSubPage from './ApkInstaller';
 
 // ============================================
 // SUB-PAGE SELECTOR
 // ============================================
-type SubPage = 'devices' | 'sessions' | 'report' | 'apps' | 'appupdate' | 'rates' | 'deviceowner';
+type SubPage = 'devices' | 'sessions' | 'report' | 'apps' | 'appupdate' | 'rates' | 'apkinstaller';
 
 // ============================================
 // PHONE RENTAL MANAGEMENT PAGE
@@ -51,7 +52,7 @@ const PhoneRental: React.FC = () => {
     { key: 'report', label: 'Report', icon: '📊' },
     { key: 'appupdate', label: 'App Update', icon: '⬆️' },
     { key: 'rates', label: 'CoinSlot Rates', icon: '💰' },
-    { key: 'deviceowner', label: 'Device Owner', icon: '🔐' }
+    { key: 'apkinstaller', label: 'APK Installer', icon: '📱' }
   ];
 
   return (
@@ -123,8 +124,8 @@ const PhoneRental: React.FC = () => {
           {activeSubPage === 'rates' && (
             <CoinSlotRatesSubPage />
           )}
-          {activeSubPage === 'deviceowner' && (
-            <DeviceOwnerSubPage />
+          {activeSubPage === 'apkinstaller' && (
+            <ApkInstallerSubPage onRefresh={loadData} />
           )}
         </>
       )}
@@ -2020,7 +2021,13 @@ const DeviceOwnerSubPage: React.FC = () => {
     try {
       setLoading(true);
       addLog('Checking ADB installation...');
-      const response = await fetch('/api/phone-rental/device-owner/check-adb');
+      const token = localStorage.getItem('admin_token') || '';
+      const response = await fetch('/api/phone-rental/device-owner/check-adb', {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
+      });
       const data = await response.json();
       setAdbInstalled(data.installed);
       addLog(data.installed ? '✅ ADB is installed' : '❌ ADB is not installed');
@@ -2036,8 +2043,13 @@ const DeviceOwnerSubPage: React.FC = () => {
     try {
       setLoading(true);
       addLog('Installing ADB...');
+      const token = localStorage.getItem('admin_token') || '';
       const response = await fetch('/api/phone-rental/device-owner/install-adb', {
-        method: 'POST'
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
       });
       const data = await response.json();
       
@@ -2059,7 +2071,13 @@ const DeviceOwnerSubPage: React.FC = () => {
     try {
       setLoading(true);
       addLog('Checking for connected devices...');
-      const response = await fetch('/api/phone-rental/device-owner/list-devices');
+      const token = localStorage.getItem('admin_token') || '';
+      const response = await fetch('/api/phone-rental/device-owner/list-devices', {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
+      });
       const data = await response.json();
       
       if (data.devices && data.devices.length > 0) {
@@ -2088,9 +2106,13 @@ const DeviceOwnerSubPage: React.FC = () => {
     try {
       setLoading(true);
       addLog('Setting Device Owner mode...');
+      const token = localStorage.getItem('admin_token') || '';
       const response = await fetch('/api/phone-rental/device-owner/set-owner', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({ serial: deviceSerial })
       });
       const data = await response.json();
@@ -2120,8 +2142,13 @@ const DeviceOwnerSubPage: React.FC = () => {
     try {
       setLoading(true);
       addLog('Removing Device Owner mode...');
+      const token = localStorage.getItem('admin_token') || '';
       const response = await fetch('/api/phone-rental/device-owner/remove-owner', {
-        method: 'POST'
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
       });
       const data = await response.json();
       

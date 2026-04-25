@@ -30,6 +30,7 @@ import com.ajcpisowifi.phonerental.network.RentalSessionInfo
 import com.ajcpisowifi.phonerental.network.RentalRate
 import com.ajcpisowifi.phonerental.network.CoinslotDevice
 import com.ajcpisowifi.phonerental.service.HeartbeatWorker
+import com.ajcpisowifi.phonerental.service.KioskKeeperService
 import com.ajcpisowifi.phonerental.service.StatusBarBlockerService
 import com.ajcpisowifi.phonerental.service.TimerService
 import com.ajcpisowifi.phonerental.util.AppUpdater
@@ -258,13 +259,24 @@ class MainActivity : AppCompatActivity() {
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
-        // Bring back to this app ONLY during active rental or expired session
-        // Do NOT trap user during setup, idle, or not-registered states
-        if (activeSession != null && !isLaunchingAllowedApp && !isOpeningAdminPanel) {
-            val intent = Intent(this, MainActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            }
-            startActivity(intent)
+        
+        // Bring back to this app when HOME is pressed:
+        // - During active rental session
+        // - During idle state (no session)
+        // - During expired session
+        // BUT NOT when intentionally launching an allowed app or opening admin panel
+        if (!isLaunchingAllowedApp && !isOpeningAdminPanel) {
+            Log.d(TAG, "HOME button pressed - bringing rental app back to foreground")
+            
+            // Small delay to let HOME animation complete
+            Handler(Looper.getMainLooper()).postDelayed({
+                val intent = Intent(this, MainActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                }
+                startActivity(intent)
+            }, 200)
+        } else {
+            Log.d(TAG, "onUserLeaveHint - user launching allowed app or admin panel, allowing")
         }
     }
 
@@ -384,7 +396,7 @@ class MainActivity : AppCompatActivity() {
         val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
         val componentName = ComponentName(this, KioskDeviceAdmin::class.java)
 
-        // Enable launcher alias so our app handles HOME button
+        // ALWAYS enable launcher alias - this makes our app respond to HOME button
         val launcherAlias = ComponentName(this, "com.ajcpisowifi.phonerental.ui.MainLauncherAlias")
         try {
             packageManager.setComponentEnabledSetting(
@@ -392,30 +404,31 @@ class MainActivity : AppCompatActivity() {
                 android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
                 android.content.pm.PackageManager.DONT_KILL_APP
             )
+            Log.d(TAG, "Launcher alias enabled")
         } catch (e: Exception) {
             Log.w(TAG, "Could not enable launcher alias: ${e.message}")
         }
 
         if (dpm.isDeviceOwnerApp(packageName)) {
-            // Set lock task packages to include our app + all allowed apps so they can open
+            // Device Owner: Use full lock task mode with whitelisted apps
             val allowedPackages = appManager.getAllowedAppPackages().toMutableSet()
-            allowedPackages.add(packageName) // Always include our app
+            allowedPackages.add(packageName)
             dpm.setLockTaskPackages(componentName, allowedPackages.toTypedArray())
-
-            // Start lock task (kiosk mode)
             startLockTask()
-            Log.d(TAG, "Kiosk mode started - device owner, ${allowedPackages.size} apps whitelisted")
+            Log.d(TAG, "Kiosk mode: Device Owner with lock task, ${allowedPackages.size} apps")
         } else if (dpm.isAdminActive(componentName)) {
-            // Admin but not device owner - enable launcher alias only
-            // Pressing Home will come back to this app
-            Log.d(TAG, "Kiosk mode: launcher alias enabled (Device Admin)")
-
-            // Check if we are the default launcher
-            if (!isDefaultLauncher()) {
-                Toast.makeText(this, "Tip: Set this app as default launcher for full kiosk mode", Toast.LENGTH_LONG).show()
-            } else {
-                Toast.makeText(this, "Rental mode active", Toast.LENGTH_SHORT).show()
+            // Device Admin only: Use Kiosk Keeper Service (constantly monitors & brings app back)
+            Log.d(TAG, "Kiosk mode: Device Admin with Kiosk Keeper Service")
+            KioskKeeperService.start(this)
+            StatusBarBlockerService.start(this)
+            
+            if (isMIUIDevice()) {
+                Toast.makeText(this, "MIUI kiosk mode active", Toast.LENGTH_SHORT).show()
             }
+        } else {
+            // No Device Admin: Use Kiosk Keeper Service as fallback
+            KioskKeeperService.start(this)
+            StatusBarBlockerService.start(this)
         }
     }
 
@@ -424,6 +437,21 @@ class MainActivity : AppCompatActivity() {
         homeIntent.addCategory(Intent.CATEGORY_HOME)
         val resolveInfo = packageManager.resolveActivity(homeIntent, PackageManager.MATCH_DEFAULT_ONLY)
         return resolveInfo?.activityInfo?.packageName == packageName
+    }
+
+    /**
+     * Check if device is running MIUI/HyperOS (Xiaomi/Redmi/POCO)
+     * These devices block custom launchers, so we use overlay-based kiosk instead.
+     */
+    private fun isMIUIDevice(): Boolean {
+        return try {
+            val clazz = Class.forName("android.os.SystemProperties")
+            val method = clazz.getMethod("get", String::class.java)
+            val miuiVersion = method.invoke(null, "ro.miui.ui.version.name") as String?
+            miuiVersion != null && miuiVersion.isNotEmpty()
+        } catch (e: Exception) {
+            false
+        }
     }
 
     /**
@@ -509,9 +537,10 @@ class MainActivity : AppCompatActivity() {
         val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
         val componentName = ComponentName(this, KioskDeviceAdmin::class.java)
 
-        // Stop lock task if active
+        // Stop lock task if active - allow user to access system during pause
         try {
             stopLockTask()
+            Log.d(TAG, "Kiosk mode paused - lock task stopped")
         } catch (e: Exception) {
             Log.w(TAG, "Not in lock task mode or could not stop: ${e.message}")
         }
@@ -655,17 +684,19 @@ class MainActivity : AppCompatActivity() {
         // Load rental rates
         loadRentalRates()
 
-        // Launcher alias stays ENABLED - Home button still returns to this app
-        // Only stop lock task if device owner (screen pinning)
+        // In idle state: DO NOT use lock task (it blocks app launching without Device Owner)
+        // Only use lock task if Device Owner is set
         val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-        val componentName = ComponentName(this, KioskDeviceAdmin::class.java)
         if (dpm.isDeviceOwnerApp(packageName)) {
+            val componentName = ComponentName(this, KioskDeviceAdmin::class.java)
             try {
-                stopLockTask()
-                dpm.setLockTaskPackages(componentName, emptyArray())
+                startLockTask()
+                Log.d(TAG, "Idle state: lock task mode active (Device Owner)")
             } catch (e: Exception) {
-                Log.w(TAG, "Could not stop lock task: ${e.message}")
+                Log.w(TAG, "Idle state: lock task failed - ${e.message}")
             }
+        } else {
+            Log.d(TAG, "Idle state: overlay mode (no lock task)")
         }
 
         // Stop timer service

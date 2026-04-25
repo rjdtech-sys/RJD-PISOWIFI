@@ -9548,108 +9548,114 @@ app.post('/api/phone-rental/app-update/upload', requireAdmin, uploadApk.single('
 });
 
 // ============================================
-// PHONE RENTAL - DEVICE OWNER SETUP
+// PHONE RENTAL - APK INSTALLER VIA ADB
 // ============================================
 
 // Check if ADB is installed
-app.get('/api/phone-rental/device-owner/check-adb', requireAdmin, async (req, res) => {
+app.get('/api/phone-rental/apk-installer/check-adb', requireAdmin, async (req, res) => {
   try {
-    const { stdout } = await execPromise('which adb');
-    res.json({ installed: true, path: stdout.trim() });
+    const { stdout } = await execPromise('test -x /usr/bin/adb && echo /usr/bin/adb || echo NOT_FOUND');
+    const adbPath = stdout.trim();
+    
+    if (adbPath && adbPath !== 'NOT_FOUND') {
+      return res.json({ installed: true, path: adbPath });
+    }
+    
+    res.json({ installed: false });
   } catch (err) {
     res.json({ installed: false });
   }
 });
 
-// Install ADB
-app.post('/api/phone-rental/device-owner/install-adb', requireAdmin, async (req, res) => {
-  try {
-    const { stdout, stderr } = await execPromise('sudo apt update && sudo apt install -y android-tools-adb android-tools-fastboot');
-    res.json({ success: true, output: stdout });
-  } catch (err) {
-    res.status(500).json({ 
-      success: false, 
-      error: err.message,
-      solution: 'Try running: sudo apt install -y android-tools-adb'
-    });
-  }
-});
-
-// List connected devices
-app.get('/api/phone-rental/device-owner/list-devices', requireAdmin, async (req, res) => {
+// List connected Android devices
+app.get('/api/phone-rental/apk-installer/devices', requireAdmin, async (req, res) => {
   try {
     const { stdout } = await execPromise('adb devices');
     const lines = stdout.split('\n').filter(line => line.includes('\tdevice'));
-    const devices = lines.map(line => line.split('\t')[0]);
+    const devices = lines.map(line => {
+      const parts = line.split('\t');
+      return { serial: parts[0], status: parts[1] };
+    });
     res.json({ devices });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Set Device Owner
-app.post('/api/phone-rental/device-owner/set-owner', requireAdmin, async (req, res) => {
+// Get latest APK file
+app.get('/api/phone-rental/apk-installer/latest-apk', requireAdmin, async (req, res) => {
   try {
-    const { serial } = req.body;
-    if (!serial) {
-      return res.status(400).json({ error: 'Device serial is required' });
-    }
-
-    const component = 'com.ajcpisowifi.phonerental/.admin.KioskDeviceAdmin';
-    const command = serial 
-      ? `adb -s ${serial} shell dpm set-device-owner ${component}`
-      : `adb shell dpm set-device-owner ${component}`;
-
-    const { stdout, stderr } = await execPromise(command);
+    const apkDir = '/opt/ajc-pisowifi/android/phone-rental-app';
+    const { stdout } = await execPromise(`ls -t ${apkDir}/*.apk | head -1`);
+    const apkPath = stdout.trim();
     
-    if (stdout.includes('Success') || stdout.includes('Device owner set')) {
-      res.json({ success: true, message: stdout });
-    } else {
-      res.status(500).json({ 
-        success: false, 
-        error: stderr || stdout,
-        solution: 'Make sure device is factory reset and has no existing Device Owner'
+    if (apkPath) {
+      const filename = apkPath.split('/').pop();
+      const { stdout: sizeOut } = await execPromise(`stat -c%s "${apkPath}"`);
+      const { stdout: dateOut } = await execPromise(`stat -c%y "${apkPath}" | cut -d'.' -f1`);
+      
+      res.json({
+        found: true,
+        path: apkPath,
+        filename: filename,
+        size: parseInt(sizeOut.trim()),
+        modified: dateOut.trim()
       });
+    } else {
+      res.json({ found: false });
     }
   } catch (err) {
-    let errorMessage = err.message;
-    let solution = '';
-    
-    if (errorMessage.includes('device has a device owner')) {
-      solution = 'Remove existing Device Owner first: Settings > Security > Device administrators > Deactivate';
-    } else if (errorMessage.includes('not provisioned')) {
-      solution = 'Factory reset the device and try again immediately after setup (before adding Google account)';
-    } else if (errorMessage.includes('device unauthorized')) {
-      solution = 'Accept the "Allow USB debugging?" prompt on the device';
-    }
-
-    res.status(500).json({ 
-      success: false, 
-      error: errorMessage,
-      solution
-    });
+    res.json({ found: false, error: err.message });
   }
 });
 
-// Remove Device Owner
-app.post('/api/phone-rental/device-owner/remove-owner', requireAdmin, async (req, res) => {
+// Install APK on device
+app.post('/api/phone-rental/apk-installer/install', requireAdmin, async (req, res) => {
   try {
-    const { stdout, stderr } = await execPromise('adb shell dpm clear-device-owner');
+    const { serial } = req.body;
     
-    if (stdout.includes('Success') || stderr.includes('Success')) {
-      res.json({ success: true, message: 'Device Owner removed' });
+    if (!serial) {
+      return res.status(400).json({ error: 'Device serial is required' });
+    }
+    
+    // Find latest APK
+    const apkDir = '/opt/ajc-pisowifi/android/phone-rental-app';
+    const { stdout: apkOut } = await execPromise(`ls -t ${apkDir}/*.apk | head -1`);
+    const apkPath = apkOut.trim();
+    
+    if (!apkPath) {
+      return res.status(404).json({ error: 'No APK files found' });
+    }
+    
+    console.log(`[APK-INSTALL] Installing ${apkPath} on device ${serial}`);
+    
+    // Install APK
+    const command = serial 
+      ? `adb -s ${serial} install -r "${apkPath}"`
+      : `adb install -r "${apkPath}"`;
+    
+    const { stdout, stderr } = await execPromise(command, { timeout: 120000 });
+    
+    if (stdout.includes('Success') || stdout.includes('success')) {
+      console.log(`[APK-INSTALL] Successfully installed on ${serial}`);
+      res.json({ 
+        success: true, 
+        message: 'APK installed successfully',
+        output: stdout
+      });
     } else {
       res.status(500).json({ 
         success: false, 
         error: stderr || stdout,
-        solution: 'You may need to factory reset the device'
+        output: stdout + stderr
       });
     }
   } catch (err) {
+    console.error('[APK-INSTALL] Error:', err.message);
     res.status(500).json({ 
       success: false, 
       error: err.message,
-      solution: 'Try: adb shell dpm clear-device-owner'
+      output: err.stdout || err.stderr || ''
     });
   }
 });
