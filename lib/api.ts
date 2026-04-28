@@ -1,5 +1,5 @@
 
-import { Rate, NetworkInterface, SystemConfig, WanConfig, VlanConfig, WifiDevice, DeviceSession, PPPoEServerConfig, PPPoEUser, PPPoESession, QoSConfig, PPPoEProfile, PPPoEBillingProfile, PPPoEPool, PPPoESale, MikrotikRouter, MikrotikBillingData, MikrotikRouterSnapshot, Employee, DTRRecord, PayrollRecord, Equipment, EquipmentWithdrawal, RentalDevice, RentalSession, RentalReport, PhoneRentalRate } from '../types';
+import { Rate, NetworkInterface, SystemConfig, WanConfig, VlanConfig, WanInterface, WifiDevice, DeviceSession, PPPoEServerConfig, PPPoEUser, PPPoESession, QoSConfig, PPPoEProfile, PPPoEBillingProfile, PPPoEPool, PPPoESale, MikrotikRouter, MikrotikBillingData, MikrotikRouterSnapshot, Employee, DTRRecord, PayrollRecord, Equipment, EquipmentWithdrawal, RentalDevice, RentalSession, RentalReport, PhoneRentalRate } from '../types';
 
 const API_BASE = '/api';
 
@@ -348,6 +348,63 @@ export const apiClient = {
       headers: getHeaders()
     });
     await handleResponse(res);
+  },
+
+  // ============================================
+  // WAN INTERFACE CRUD APIs
+  // ============================================
+
+  async getWanInterfaces(): Promise<{ success: boolean; wans: WanInterface[] }> {
+    const res = await fetch(`${API_BASE}/multiwan/wans`, { headers: getHeaders() });
+    return handleResponse(res);
+  },
+
+  async createWanInterface(wan: Omit<WanInterface, 'id' | 'created_at' | 'updated_at'>): Promise<{ success: boolean; wan: WanInterface }> {
+    const res = await fetch(`${API_BASE}/multiwan/wans`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(wan)
+    });
+    return handleResponse(res);
+  },
+
+  async updateWanInterface(id: number, updates: Partial<WanInterface>): Promise<{ success: boolean; wan: WanInterface }> {
+    const res = await fetch(`${API_BASE}/multiwan/wans/${id}`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify(updates)
+    });
+    return handleResponse(res);
+  },
+
+  async deleteWanInterface(id: number): Promise<{ success: boolean }> {
+    const res = await fetch(`${API_BASE}/multiwan/wans/${id}`, {
+      method: 'DELETE',
+      headers: getHeaders()
+    });
+    return handleResponse(res);
+  },
+
+  async applyWanInterface(id: number): Promise<{ success: boolean; error?: string; status?: { status: string; ip: string | null } }> {
+    const res = await fetch(`${API_BASE}/multiwan/wans/${id}/apply`, {
+      method: 'POST',
+      headers: getHeaders()
+    });
+    return handleResponse(res);
+  },
+
+  async getWanInterfaceStatus(id: number): Promise<{ success: boolean; status: { status: string; ip: string | null } }> {
+    const res = await fetch(`${API_BASE}/multiwan/wans/${id}/status`, { headers: getHeaders() });
+    return handleResponse(res);
+  },
+
+  async createVlanAsIsp(payload: { parent: string; id: number; type?: 'dhcp' | 'static' | 'pppoe'; config?: any; gateway?: string; weight?: number }): Promise<{ success: boolean; name: string; wan: WanInterface }> {
+    const res = await fetch(`${API_BASE}/network/vlan/isp`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(payload)
+    });
+    return handleResponse(res);
   },
 
   // Create a software bridge interface with member ports

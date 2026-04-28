@@ -6868,7 +6868,7 @@ app.post('/api/multiwan/config', requireAdmin, async (req, res) => {
 async function applyMultiWanConfig(config) {
     try {
         console.log('[MultiWAN] Applying configuration...', config.mode);
-        
+
         const run = async (cmd) => {
             try { await execPromise(cmd); } catch (e) { /* ignore */ }
         };
@@ -6876,17 +6876,30 @@ async function applyMultiWanConfig(config) {
         // 1. Cleanup existing rules
         await run('iptables -t mangle -F AJC_MULTIWAN');
         await run('iptables -t mangle -D PREROUTING -j AJC_MULTIWAN');
-        
+
         // If disabled, stop here
-        if (!config.enabled || !config.interfaces || config.interfaces.length < 2) {
-             return;
-        }
+        if (!config.enabled) return;
+
+        // Pull from wan_interfaces table if available, otherwise fallback to config.interfaces
+        let ifaces = config.interfaces || [];
+        try {
+          const dbWans = await db.all('SELECT * FROM wan_interfaces WHERE enabled = 1');
+          if (dbWans && dbWans.length > 0) {
+            ifaces = dbWans.map(w => ({
+              interface: w.name,
+              gateway: w.gateway,
+              weight: w.weight || 1,
+              type: w.type
+            }));
+          }
+        } catch (e) {}
+
+        if (!ifaces || ifaces.length < 2) return;
 
         // 2. Initialize Chain
         await run('iptables -t mangle -N AJC_MULTIWAN');
         await run('iptables -t mangle -I PREROUTING -j AJC_MULTIWAN');
 
-        const ifaces = config.interfaces;
         
         if (config.mode === 'pcc') {
             // Restore Connmark
@@ -6933,7 +6946,154 @@ async function applyMultiWanConfig(config) {
     }
 }
 
+// ============================================
+// WAN INTERFACE CRUD API
+// ============================================
 
+app.get('/api/multiwan/wans', requireAdmin, async (req, res) => {
+  try {
+    const rows = await db.all('SELECT * FROM wan_interfaces ORDER BY created_at');
+    const wans = rows.map(r => ({
+      ...r,
+      config: JSON.parse(r.config || '{}'),
+      enabled: !!r.enabled,
+      is_vlan: !!r.is_vlan
+    }));
+    res.json({ success: true, wans });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/multiwan/wans', requireAdmin, async (req, res) => {
+  try {
+    const { name, type, config, gateway, weight, enabled, is_vlan, vlan_parent, vlan_id } = req.body;
+    if (!name) return res.status(400).json({ error: 'Interface name is required' });
+    if (!type || !['dhcp', 'static', 'pppoe'].includes(type)) {
+      return res.status(400).json({ error: 'Valid type required (dhcp, static, pppoe)' });
+    }
+
+    const result = await db.run(
+      'INSERT INTO wan_interfaces (name, type, config, gateway, weight, enabled, is_vlan, vlan_parent, vlan_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [name, type, JSON.stringify(config || {}), gateway || null, weight || 1, enabled ? 1 : 0, is_vlan ? 1 : 0, vlan_parent || null, vlan_id || null]
+    );
+
+    const newWan = await db.get('SELECT * FROM wan_interfaces WHERE id = ?', [result.lastID]);
+    newWan.config = JSON.parse(newWan.config || '{}');
+
+    // Apply config to OS if enabled
+    if (newWan.enabled) {
+      await network.applyWanConfig(newWan);
+    }
+
+    res.json({ success: true, wan: newWan });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/multiwan/wans/:id', requireAdmin, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!id || Number.isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
+
+    const { name, type, config, gateway, weight, enabled } = req.body;
+    await db.run(
+      'UPDATE wan_interfaces SET name = ?, type = ?, config = ?, gateway = ?, weight = ?, enabled = ?, updated_at = datetime("now") WHERE id = ?',
+      [name, type, JSON.stringify(config || {}), gateway || null, weight || 1, enabled ? 1 : 0, id]
+    );
+
+    const updated = await db.get('SELECT * FROM wan_interfaces WHERE id = ?', [id]);
+    updated.config = JSON.parse(updated.config || '{}');
+
+    // Re-apply config
+    if (updated.enabled) {
+      await network.applyWanConfig(updated);
+    } else {
+      await network.removeWanConfig(updated.name);
+    }
+
+    res.json({ success: true, wan: updated });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/multiwan/wans/:id', requireAdmin, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!id || Number.isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
+
+    const wan = await db.get('SELECT * FROM wan_interfaces WHERE id = ?', [id]);
+    if (wan) {
+      await network.removeWanConfig(wan.name);
+    }
+    await db.run('DELETE FROM wan_interfaces WHERE id = ?', [id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/multiwan/wans/:id/apply', requireAdmin, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!id || Number.isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
+
+    const wan = await db.get('SELECT * FROM wan_interfaces WHERE id = ?', [id]);
+    if (!wan) return res.status(404).json({ error: 'WAN interface not found' });
+
+    wan.config = JSON.parse(wan.config || '{}');
+    const result = await network.applyWanConfig(wan);
+
+    // Update live status
+    const status = await network.getWanStatus(wan.name);
+    await db.run('UPDATE wan_interfaces SET status = ?, ip_address = ?, updated_at = datetime("now") WHERE id = ?',
+      [status.status, status.ip, id]);
+
+    res.json({ success: result.success, error: result.error, status });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/multiwan/wans/:id/status', requireAdmin, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!id || Number.isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
+
+    const wan = await db.get('SELECT name FROM wan_interfaces WHERE id = ?', [id]);
+    if (!wan) return res.status(404).json({ error: 'WAN interface not found' });
+
+    const status = await network.getWanStatus(wan.name);
+    await db.run('UPDATE wan_interfaces SET status = ?, ip_address = ? WHERE id = ?',
+      [status.status, status.ip, id]);
+
+    res.json({ success: true, status });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Create VLAN as ISP (adds to wan_interfaces automatically)
+app.post('/api/network/vlan/isp', requireAdmin, async (req, res) => {
+  try {
+    const { parent, id: vlanId, type = 'dhcp', config, gateway, weight } = req.body;
+    if (!parent || !vlanId) {
+      return res.status(400).json({ error: 'Parent interface and VLAN ID are required' });
+    }
+
+    // Create VLAN interface
+    const vlanName = await network.createVlan({ parent, id: vlanId });
+    await db.run('INSERT OR REPLACE INTO vlans (name, parent, id) VALUES (?, ?, ?)',
+      [vlanName, parent, vlanId]);
+
+    // Register as WAN interface
+    const result = await db.run(
+      'INSERT INTO wan_interfaces (name, type, config, gateway, weight, enabled, is_vlan, vlan_parent, vlan_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [vlanName, type, JSON.stringify(config || {}), gateway || null, weight || 1, 1, 1, parent, vlanId]
+    );
+
+    const newWan = await db.get('SELECT * FROM wan_interfaces WHERE id = ?', [result.lastID]);
+    newWan.config = JSON.parse(newWan.config || '{}');
+
+    // Apply WAN config
+    await network.applyWanConfig(newWan);
+
+    res.json({ success: true, name: vlanName, wan: newWan });
+  } catch (err) {
+    console.error('[VLAN-ISP] Create Error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // Background Timer has been moved inside server.listen to ensure DB initialization
 
@@ -6978,6 +7138,16 @@ async function bootupRestore(isRestricted = false) {
       await network.createVlan(v).catch(e => console.error(`[AJC] VLAN Restore Failed: ${e.message}`));
     }
   } catch (e) { console.error('[AJC] Failed to load VLANs from DB', e); }
+
+  // 0.5 Restore WAN Interfaces
+  try {
+    const wans = await db.all('SELECT * FROM wan_interfaces WHERE enabled = 1');
+    for (const w of wans) {
+      console.log(`[AJC] Restoring WAN ${w.name} (${w.type})...`);
+      w.config = JSON.parse(w.config || '{}');
+      await network.applyWanConfig(w).catch(e => console.error(`[AJC] WAN Restore Failed: ${e.message}`));
+    }
+  } catch (e) { console.error('[AJC] Failed to restore WAN interfaces', e); }
 
   // 1. Restore Bridges
   try {

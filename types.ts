@@ -109,6 +109,36 @@ export interface WanConfig {
   dns: string[];
 }
 
+export interface WanInterface {
+  id?: number;
+  name: string;
+  type: 'dhcp' | 'static' | 'pppoe';
+  config: WanInterfaceConfig;
+  gateway?: string | null;
+  weight: number;
+  enabled: number;
+  is_vlan: number;
+  vlan_parent?: string | null;
+  vlan_id?: number | null;
+  status?: string;
+  ip_address?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface WanInterfaceConfig {
+  // Static
+  ipaddr?: string;
+  netmask?: string;
+  gateway?: string;
+  dns?: string[];
+  // PPPoE
+  username?: string;
+  password?: string;
+  // Common
+  metric?: number;
+}
+
 export interface VlanConfig {
   id: number;
   parentInterface: string;
