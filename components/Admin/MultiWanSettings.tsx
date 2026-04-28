@@ -51,7 +51,10 @@ const MultiWanSettings: React.FC = () => {
 
   const fetchConfig = async () => {
     try {
-      const res = await fetch('/api/multiwan/config');
+      const token = localStorage.getItem('ajc_admin_token');
+      const res = await fetch('/api/multiwan/config', {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
       const data = await res.json();
       if (data.success && data.config) {
         setConfig({
