@@ -24,11 +24,12 @@ const MultiWanSettings: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [availableInterfaces, setAvailableInterfaces] = useState<NetworkIface[]>([]);
+  const [availableVlans, setAvailableVlans] = useState<{ name: string; parent: string; id: number }[]>([]);
+  const [defaultWan, setDefaultWan] = useState<string | null>(null);
 
   // Modals
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [showVlanModal, setShowVlanModal] = useState(false);
   const [editingWan, setEditingWan] = useState<WanInterface | null>(null);
 
   // Add WAN form
@@ -41,19 +42,12 @@ const MultiWanSettings: React.FC = () => {
     enabled: 1
   });
 
-  // VLAN form
-  const [vlanForm, setVlanForm] = useState({
-    parent: '',
-    id: 10,
-    type: 'dhcp' as 'dhcp' | 'static' | 'pppoe',
-    gateway: '',
-    weight: 1
-  });
-
   useEffect(() => {
     fetchConfig();
     fetchWans();
     fetchInterfaces();
+    fetchVlans();
+    fetchDefaultWan();
   }, []);
 
   const fetchConfig = async () => {
@@ -98,6 +92,29 @@ const MultiWanSettings: React.FC = () => {
     }
   };
 
+  const fetchVlans = async () => {
+    try {
+      const res = await fetch('/api/network/vlans');
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setAvailableVlans(data.map((v: any) => ({ name: v.name, parent: v.parent, id: v.id })));
+      }
+    } catch (e) {
+      // Fallback
+    }
+  };
+
+  const fetchDefaultWan = async () => {
+    try {
+      const data = await apiClient.getDefaultWan();
+      if (data.success) {
+        setDefaultWan(data.interface);
+      }
+    } catch (e) {
+      // Fallback
+    }
+  };
+
   const handleSaveConfig = async () => {
     setSaving(true);
     try {
@@ -132,7 +149,7 @@ const MultiWanSettings: React.FC = () => {
         gateway: addForm.gateway || null,
         weight: addForm.weight || 1,
         enabled: addForm.enabled ?? 1,
-        is_vlan: 0
+        is_vlan: availableVlans.some(v => v.name === addForm.name) ? 1 : 0
       };
       await apiClient.createWanInterface(payload);
       setShowAddModal(false);
@@ -141,6 +158,19 @@ const MultiWanSettings: React.FC = () => {
     } catch (e: any) {
       alert('Failed to add WAN: ' + e.message);
     }
+  };
+
+  const handleConfigureDefaultWan = () => {
+    if (!defaultWan) return;
+    setAddForm({
+      name: defaultWan,
+      type: 'dhcp',
+      config: {},
+      gateway: '',
+      weight: 1,
+      enabled: 1
+    });
+    setShowAddModal(true);
   };
 
   const handleEditWan = async () => {
@@ -186,28 +216,6 @@ const MultiWanSettings: React.FC = () => {
     }
   };
 
-  const handleCreateVlanIsp = async () => {
-    if (!vlanForm.parent || !vlanForm.id) {
-      alert('Parent interface and VLAN ID are required');
-      return;
-    }
-    try {
-      await apiClient.createVlanAsIsp({
-        parent: vlanForm.parent,
-        id: vlanForm.id,
-        type: vlanForm.type,
-        gateway: vlanForm.gateway || undefined,
-        weight: vlanForm.weight
-      });
-      setShowVlanModal(false);
-      setVlanForm({ parent: '', id: 10, type: 'dhcp', gateway: '', weight: 1 });
-      fetchWans();
-      fetchInterfaces();
-    } catch (e: any) {
-      alert('Failed to create VLAN ISP: ' + e.message);
-    }
-  };
-
   const getTypeBadge = (type: string) => {
     switch (type) {
       case 'dhcp': return 'bg-blue-100 text-blue-700';
@@ -221,6 +229,10 @@ const MultiWanSettings: React.FC = () => {
     if (!enabled) return 'bg-gray-100 text-gray-500';
     if (status === 'up') return 'bg-green-100 text-green-700';
     return 'bg-red-100 text-red-700';
+  };
+
+  const isDefaultWanConfigured = () => {
+    return defaultWan ? wans.some(w => w.name === defaultWan) : true;
   };
 
   const renderConfigFields = (form: Partial<WanInterface>, setForm: React.Dispatch<React.SetStateAction<any>>) => {
@@ -340,35 +352,46 @@ const MultiWanSettings: React.FC = () => {
         {/* Main Content */}
         <div className="lg:col-span-2 space-y-6">
 
+          {/* Default WAN Alert */}
+          {defaultWan && !isDefaultWanConfigured() && (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center text-amber-600 font-black text-lg">!</div>
+                <div>
+                  <div className="font-black text-sm text-slate-800 uppercase">Default WAN Detected: {defaultWan}</div>
+                  <div className="text-xs text-slate-500 mt-0.5">This interface currently handles your internet traffic. Configure it to manage settings.</div>
+                </div>
+              </div>
+              <button
+                onClick={handleConfigureDefaultWan}
+                className="text-[10px] font-black uppercase tracking-widest bg-amber-500 text-white px-4 py-2 rounded-xl hover:bg-amber-600 transition-colors shadow-sm"
+              >
+                Configure
+              </button>
+            </div>
+          )}
+
           {/* WAN Interface Cards */}
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
             <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
               <h3 className="font-black text-slate-800 uppercase tracking-widest text-sm">WAN Interfaces</h3>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setShowVlanModal(true)}
-                  className="text-[10px] font-black uppercase tracking-widest bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition-colors"
-                >
-                  + VLAN ISP
-                </button>
-                <button
-                  onClick={() => setShowAddModal(true)}
-                  className="text-[10px] font-black uppercase tracking-widest bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors"
-                >
-                  + Add WAN
-                </button>
-              </div>
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="text-[10px] font-black uppercase tracking-widest bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors"
+              >
+                + Add WAN
+              </button>
             </div>
             <div className="p-6">
-              {wans.length === 0 ? (
+              {wans.length === 0 && !defaultWan ? (
                 <div className="text-center py-12 text-slate-400 text-xs font-bold uppercase border-2 border-dashed border-slate-200 rounded-xl">
                   No WAN interfaces configured
-                  <div className="mt-2 font-normal normal-case text-slate-400">Click "Add WAN" or "VLAN ISP" to get started</div>
+                  <div className="mt-2 font-normal normal-case text-slate-400">Click "Add WAN" to get started</div>
                 </div>
               ) : (
                 <div className="space-y-3">
                   {wans.map((wan) => (
-                    <div key={wan.id} className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-xl shadow-sm hover:border-blue-200 transition-colors">
+                    <div key={wan.id} className={`flex items-center justify-between p-4 bg-white border rounded-xl shadow-sm hover:border-blue-200 transition-colors ${defaultWan === wan.name ? 'border-amber-300 bg-amber-50/30' : 'border-slate-200'}`}>
                       <div className="flex items-center gap-4">
                         <div className={`w-12 h-12 rounded-lg flex items-center justify-center font-black text-xs uppercase ${getStatusBadge(wan.status, wan.enabled)}`}>
                           {wan.status === 'up' ? 'UP' : wan.enabled ? 'DN' : 'OFF'}
@@ -376,6 +399,11 @@ const MultiWanSettings: React.FC = () => {
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="font-black text-sm text-slate-800 uppercase">{wan.name}</span>
+                            {defaultWan === wan.name && (
+                              <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
+                                DEFAULT WAN
+                              </span>
+                            )}
                             <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${getTypeBadge(wan.type)}`}>
                               {wan.type}
                             </span>
@@ -492,8 +520,12 @@ const MultiWanSettings: React.FC = () => {
                 DHCP for auto-config, Static for fixed IPs, PPPoE for DSL/fiber requiring login.
               </p>
               <p>
-                <strong className="block text-indigo-200 mb-1 uppercase text-[10px]">VLAN as ISP</strong>
-                Create VLAN interfaces when your ISP delivers service over tagged VLANs (e.g., VLAN 10, 20).
+                <strong className="block text-indigo-200 mb-1 uppercase text-[10px]">Default WAN</strong>
+                The system auto-detects your current default internet interface. Configure it to manage settings.
+              </p>
+              <p>
+                <strong className="block text-indigo-200 mb-1 uppercase text-[10px]">VLAN Interfaces</strong>
+                Existing VLANs appear in the Add WAN dropdown so you can use them as WAN.
               </p>
               <p>
                 <strong className="block text-indigo-200 mb-1 uppercase text-[10px]">Load Balancing</strong>
@@ -513,28 +545,41 @@ const MultiWanSettings: React.FC = () => {
             </div>
             <div className="p-6 space-y-4">
               <div>
-                <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Interface Name</label>
-                {availableInterfaces.length > 0 ? (
-                  <select
-                    className="w-full p-2 rounded-lg border border-slate-200 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    value={addForm.name}
-                    onChange={e => setAddForm({ ...addForm, name: e.target.value })}
-                  >
-                    <option value="">Select interface...</option>
-                    {availableInterfaces.map(iface => (
-                      <option key={iface.name} value={iface.name}>{iface.name} ({iface.type})</option>
+                <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Interface</label>
+                <select
+                  className="w-full p-2 rounded-lg border border-slate-200 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={addForm.name}
+                  onChange={e => setAddForm({ ...addForm, name: e.target.value })}
+                >
+                  <option value="">Select interface...</option>
+                  <optgroup label="Physical Interfaces">
+                    {availableInterfaces.filter(i => i.type === 'ethernet').map(iface => (
+                      <option key={iface.name} value={iface.name}>{iface.name} ({iface.status})</option>
                     ))}
-                  </select>
-                ) : (
+                  </optgroup>
+                  {availableVlans.length > 0 && (
+                    <optgroup label="VLAN Interfaces">
+                      {availableVlans.map(vlan => (
+                        <option key={vlan.name} value={vlan.name}>{vlan.name} (VLAN {vlan.id} on {vlan.parent})</option>
+                      ))}
+                    </optgroup>
+                  )}
+                  <option value="custom">Custom (Type manually)</option>
+                </select>
+              </div>
+
+              {addForm.name === 'custom' && (
+                <div>
+                  <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Custom Name</label>
                   <input
                     type="text"
-                    placeholder="e.g. eth1"
-                    className="w-full p-2 rounded-lg border border-slate-200 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    value={addForm.name}
+                    placeholder="e.g. eth1.100"
+                    className="w-full p-2 rounded-lg border border-slate-200 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                    value={addForm.name === 'custom' ? '' : addForm.name}
                     onChange={e => setAddForm({ ...addForm, name: e.target.value })}
                   />
-                )}
-              </div>
+                </div>
+              )}
 
               {renderConfigFields(addForm, setAddForm)}
 
@@ -627,80 +672,6 @@ const MultiWanSettings: React.FC = () => {
             <div className="p-6 border-t border-slate-100 flex justify-end gap-2">
               <button onClick={() => setShowEditModal(false)} className="px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50 transition-colors">Cancel</button>
               <button onClick={handleEditWan} className="px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest bg-blue-600 text-white hover:bg-blue-700 transition-colors">Save</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* VLAN as ISP Modal */}
-      {showVlanModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
-            <div className="p-6 border-b border-slate-100">
-              <h3 className="font-black text-slate-800 uppercase tracking-widest text-sm">Create VLAN as ISP</h3>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Parent Interface</label>
-                <select
-                  className="w-full p-2 rounded-lg border border-slate-200 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={vlanForm.parent}
-                  onChange={e => setVlanForm({ ...vlanForm, parent: e.target.value })}
-                >
-                  <option value="">Select parent...</option>
-                  {availableInterfaces.filter(i => i.type === 'ethernet').map(iface => (
-                    <option key={iface.name} value={iface.name}>{iface.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">VLAN ID</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="4094"
-                  className="w-full p-2 rounded-lg border border-slate-200 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={vlanForm.id}
-                  onChange={e => setVlanForm({ ...vlanForm, id: parseInt(e.target.value) || 10 })}
-                />
-              </div>
-              <div>
-                <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">WAN Type</label>
-                <select
-                  className="w-full p-2 rounded-lg border border-slate-200 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={vlanForm.type}
-                  onChange={e => setVlanForm({ ...vlanForm, type: e.target.value as any })}
-                >
-                  <option value="dhcp">DHCP</option>
-                  <option value="static">Static IP</option>
-                  <option value="pppoe">PPPoE</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Gateway (for load balancing)</label>
-                <input
-                  type="text"
-                  placeholder="192.168.1.1"
-                  className="w-full p-2 rounded-lg border border-slate-200 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-                  value={vlanForm.gateway}
-                  onChange={e => setVlanForm({ ...vlanForm, gateway: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Weight</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="100"
-                  className="w-full p-2 rounded-lg border border-slate-200 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={vlanForm.weight}
-                  onChange={e => setVlanForm({ ...vlanForm, weight: parseInt(e.target.value) || 1 })}
-                />
-              </div>
-            </div>
-            <div className="p-6 border-t border-slate-100 flex justify-end gap-2">
-              <button onClick={() => setShowVlanModal(false)} className="px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50 transition-colors">Cancel</button>
-              <button onClick={handleCreateVlanIsp} className="px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest bg-indigo-600 text-white hover:bg-indigo-700 transition-colors">Create VLAN ISP</button>
             </div>
           </div>
         </div>

@@ -398,12 +398,8 @@ export const apiClient = {
     return handleResponse(res);
   },
 
-  async createVlanAsIsp(payload: { parent: string; id: number; type?: 'dhcp' | 'static' | 'pppoe'; config?: any; gateway?: string; weight?: number }): Promise<{ success: boolean; name: string; wan: WanInterface }> {
-    const res = await fetch(`${API_BASE}/network/vlan/isp`, {
-      method: 'POST',
-      headers: getHeaders(),
-      body: JSON.stringify(payload)
-    });
+  async getDefaultWan(): Promise<{ success: boolean; interface: string | null }> {
+    const res = await fetch(`${API_BASE}/network/default-wan`, { headers: getHeaders() });
     return handleResponse(res);
   },
 

@@ -5223,6 +5223,13 @@ app.get('/api/network/vlans', requireAdmin, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+app.get('/api/network/default-wan', requireAdmin, async (req, res) => {
+  try {
+    const defaultWan = await network.getDefaultRouteInterface();
+    res.json({ success: true, interface: defaultWan });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.post('/api/network/vlan', requireAdmin, async (req, res) => {
   try {
     const { parent, id } = req.body;
