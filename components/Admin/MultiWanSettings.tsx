@@ -47,6 +47,7 @@ const MultiWanSettings: React.FC = () => {
     weight: 1,
     enabled: 1
   });
+  const [customIfaceName, setCustomIfaceName] = useState('');
 
   useEffect(() => {
     fetchConfig();
@@ -141,24 +142,27 @@ const MultiWanSettings: React.FC = () => {
   };
 
   const handleAddWan = async () => {
-    if (!addForm.name) {
+    // Resolve the actual interface name (custom input vs dropdown)
+    const ifaceName = addForm.name === 'custom' ? customIfaceName.trim() : addForm.name;
+    if (!ifaceName) {
       alert('Interface name is required');
       return;
     }
     try {
-      const selectedIface = availableInterfaces.find(i => i.name === addForm.name);
-      const isVlan = selectedIface?.type === 'vlan' ? 1 : 0;
+      const selectedIface = availableInterfaces.find(i => i.name === ifaceName);
+      // Auto-detect VLAN: if name contains a dot (e.g. eth0.100) treat as VLAN
+      const isVlan = selectedIface?.type === 'vlan' || (ifaceName.includes('.') && !selectedIface) ? 1 : 0;
       let vlan_parent = null;
       let vlan_id = null;
-      if (isVlan && addForm.name) {
-        const lastDot = addForm.name.lastIndexOf('.');
+      if (isVlan && ifaceName) {
+        const lastDot = ifaceName.lastIndexOf('.');
         if (lastDot > 0) {
-          vlan_parent = addForm.name.substring(0, lastDot);
-          vlan_id = parseInt(addForm.name.substring(lastDot + 1), 10);
+          vlan_parent = ifaceName.substring(0, lastDot);
+          vlan_id = parseInt(ifaceName.substring(lastDot + 1), 10);
         }
       }
       const payload = {
-        name: addForm.name!,
+        name: ifaceName!,
         type: addForm.type!,
         config: addForm.config || {},
         gateway: addForm.gateway || null,
@@ -171,6 +175,7 @@ const MultiWanSettings: React.FC = () => {
       await apiClient.createWanInterface(payload);
       setShowAddModal(false);
       setAddForm({ name: '', type: 'dhcp', config: {}, gateway: '', weight: 1, enabled: 1 });
+      setCustomIfaceName('');
       fetchWans();
     } catch (e: any) {
       alert('Failed to add WAN: ' + e.message);
@@ -187,6 +192,7 @@ const MultiWanSettings: React.FC = () => {
       weight: 1,
       enabled: 1
     });
+    setCustomIfaceName('');
     setShowAddModal(true);
   };
 
@@ -223,7 +229,9 @@ const MultiWanSettings: React.FC = () => {
     try {
       const data = await apiClient.applyWanInterface(id);
       if (data.success) {
-        alert(`WAN applied! Status: ${data.status?.status}, IP: ${data.status?.ip || 'None'}`);
+        const ip = data.status?.ip || 'None';
+        const gw = data.gateway || 'Auto';
+        alert(`WAN applied! Status: ${data.status?.status}, IP: ${ip}, Gateway: ${gw}`);
       } else {
         alert('Apply failed: ' + (data.error || 'Unknown'));
       }
@@ -740,11 +748,15 @@ const MultiWanSettings: React.FC = () => {
                   <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Custom Name</label>
                   <input
                     type="text"
-                    placeholder="e.g. eth1.100"
+                    placeholder="e.g. eth1 or eth0.100 (VLAN)"
                     className="w-full p-2 rounded-lg border border-slate-200 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-                    value={addForm.name === 'custom' ? '' : addForm.name}
-                    onChange={e => setAddForm({ ...addForm, name: e.target.value })}
+                    value={customIfaceName}
+                    onChange={e => setCustomIfaceName(e.target.value)}
+                    autoFocus
                   />
+                  {customIfaceName.includes('.') && (
+                    <p className="text-[9px] text-orange-500 font-bold mt-1 uppercase">Auto-detected as VLAN interface</p>
+                  )}
                 </div>
               )}
 

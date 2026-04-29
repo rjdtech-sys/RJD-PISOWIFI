@@ -385,7 +385,7 @@ export const apiClient = {
     return handleResponse(res);
   },
 
-  async applyWanInterface(id: number): Promise<{ success: boolean; error?: string; status?: { status: string; ip: string | null } }> {
+  async applyWanInterface(id: number): Promise<{ success: boolean; error?: string; status?: { status: string; ip: string | null }; gateway?: string | null }> {
     const res = await fetch(`${API_BASE}/multiwan/wans/${id}/apply`, {
       method: 'POST',
       headers: getHeaders()

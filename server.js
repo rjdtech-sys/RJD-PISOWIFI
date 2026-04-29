@@ -6881,16 +6881,32 @@ async function applyMultiWanConfig(config) {
         try {
           const dbWans = await db.all('SELECT * FROM wan_interfaces WHERE enabled = 1');
           if (dbWans && dbWans.length > 0) {
-            ifaces = dbWans.map(w => ({
-              interface: w.name,
-              gateway: w.gateway,
-              weight: w.weight || 1,
-              type: w.type
+            ifaces = await Promise.all(dbWans.map(async (w) => {
+              let gw = w.gateway;
+              // For DHCP WANs with no stored gateway, resolve dynamically from OS
+              if (!gw && w.type === 'dhcp') {
+                gw = await network.getWanGateway(w.name);
+                if (gw) {
+                  // Store resolved gateway in DB for future use
+                  await db.run('UPDATE wan_interfaces SET gateway = ? WHERE id = ?', [gw, w.id]).catch(() => {});
+                }
+              }
+              return {
+                interface: w.name,
+                gateway: gw,
+                weight: w.weight || 1,
+                type: w.type
+              };
             }));
           }
         } catch (e) {}
 
-        if (!ifaces || ifaces.length < 2) return;
+        // Filter out interfaces without a gateway — they can't participate in load balancing
+        const validIfaces = ifaces.filter(i => i.gateway);
+        if (validIfaces.length < 2) {
+          console.warn(`[MultiWAN] Only ${validIfaces.length} interface(s) have gateways. Need at least 2 for load balancing. Waiting for DHCP...`);
+          if (validIfaces.length < 2) return;
+        }
 
         // 2. Initialize Chain
         await run('iptables -t mangle -N AJC_MULTIWAN');
@@ -6902,10 +6918,10 @@ async function applyMultiWanConfig(config) {
             await run('iptables -t mangle -A AJC_MULTIWAN -j CONNMARK --restore-mark');
             await run('iptables -t mangle -A AJC_MULTIWAN -m mark ! --mark 0 -j RETURN');
             
-            for (let idx = 0; idx < ifaces.length; idx++) {
-                 const iface = ifaces[idx];
+            for (let idx = 0; idx < validIfaces.length; idx++) {
+                 const iface = validIfaces[idx];
                  const mark = idx + 1;
-                 const every = ifaces.length;
+                 const every = validIfaces.length;
                  
                  // Apply Mark using Nth statistic (Simulating Load Balancing)
                  // This covers "Both Addresses" intent by balancing connections
@@ -6929,7 +6945,7 @@ async function applyMultiWanConfig(config) {
         } else {
             // ECMP Logic
             let routeCmd = 'ip route replace default scope global';
-            for (const iface of ifaces) {
+            for (const iface of validIfaces) {
                 routeCmd += ` nexthop via ${iface.gateway} dev ${iface.interface} weight ${iface.weight}`;
             }
             await run(routeCmd);
@@ -6980,12 +6996,30 @@ app.post('/api/multiwan/wans', requireAdmin, async (req, res) => {
       const mwConfig = await db.get('SELECT topology FROM multi_wan_config WHERE id = 1');
       const topology = mwConfig?.topology || 'single';
 
+      // IMPORTANT: Apply the new WAN FIRST, then remove old ones
+      // This prevents internet loss during the transition
+      const applyResult = await network.applyWanConfig(newWan);
+
+      // Store resolved gateway and status
+      if (applyResult.success) {
+        await db.run(
+          'UPDATE wan_interfaces SET gateway = ?, ip_address = ?, status = ? WHERE id = ?',
+          [applyResult.gateway || gateway || null, applyResult.ip || null, applyResult.status || 'down', newWan.id]
+        );
+      }
+
       if (topology === 'single') {
-        // Disable all other WANs and remove their OS config
-        const otherWans = await db.all('SELECT * FROM wan_interfaces WHERE id != ?', [newWan.id]);
+        // Disable all other WANs and remove their OS config AFTER the new one is up
+        const otherWans = await db.all('SELECT * FROM wan_interfaces WHERE id != ? AND enabled = 1', [newWan.id]);
         for (const ow of otherWans) {
           await db.run('UPDATE wan_interfaces SET enabled = 0 WHERE id = ?', [ow.id]);
           await network.removeWanConfig(ow.name);
+        }
+        // Ensure default route goes through the new WAN
+        const resolvedGw = applyResult.gateway || await network.getWanGateway(name);
+        if (resolvedGw) {
+          await execPromise(`ip route del default 2>/dev/null || true`).catch(() => {});
+          await execPromise(`ip route add default via ${resolvedGw} dev ${name}`).catch(() => {});
         }
       } else if (topology === 'multi') {
         // Auto-enable load balancing with ECMP if 2+ WANs are now enabled
@@ -6998,11 +7032,12 @@ app.post('/api/multiwan/wans', requireAdmin, async (req, res) => {
           await applyMultiWanConfig({ enabled: true, mode: 'ecmp', pcc_method: 'both_addresses', interfaces: [], topology: 'multi' });
         }
       }
-
-      await network.applyWanConfig(newWan);
     }
 
-    res.json({ success: true, wan: newWan });
+    // Return updated WAN with resolved gateway/status
+    const updatedWan = await db.get('SELECT * FROM wan_interfaces WHERE id = ?', [newWan.id]);
+    if (updatedWan) updatedWan.config = JSON.parse(updatedWan.config || '{}');
+    res.json({ success: true, wan: updatedWan || newWan });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -7022,12 +7057,22 @@ app.put('/api/multiwan/wans/:id', requireAdmin, async (req, res) => {
 
     // Re-apply config
     if (updated.enabled) {
-      await network.applyWanConfig(updated);
+      const applyResult = await network.applyWanConfig(updated);
+      // Store resolved gateway/status
+      if (applyResult.success) {
+        const resolvedGw = applyResult.gateway || await network.getWanGateway(updated.name);
+        await db.run(
+          'UPDATE wan_interfaces SET gateway = ?, ip_address = ?, status = ? WHERE id = ?',
+          [resolvedGw, applyResult.ip || null, applyResult.status || 'down', id]
+        );
+      }
     } else {
       await network.removeWanConfig(updated.name);
     }
 
-    res.json({ success: true, wan: updated });
+    const finalWan = await db.get('SELECT * FROM wan_interfaces WHERE id = ?', [id]);
+    if (finalWan) finalWan.config = JSON.parse(finalWan.config || '{}');
+    res.json({ success: true, wan: finalWan || updated });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -7058,24 +7103,40 @@ app.post('/api/multiwan/wans/:id/apply', requireAdmin, async (req, res) => {
     const mwConfig = await db.get('SELECT topology FROM multi_wan_config WHERE id = 1');
     const topology = mwConfig?.topology || 'single';
 
+    // Ensure this WAN is enabled
+    await db.run('UPDATE wan_interfaces SET enabled = 1 WHERE id = ?', [id]);
+
+    // Apply the WAN config
+    const applyResult = await network.applyWanConfig(wan);
+
     if (topology === 'single') {
-      // Ensure this WAN is enabled and disable all others
-      await db.run('UPDATE wan_interfaces SET enabled = 1 WHERE id = ?', [id]);
-      const otherWans = await db.all('SELECT * FROM wan_interfaces WHERE id != ?', [id]);
+      // Disable all other WANs AFTER this one is up
+      const otherWans = await db.all('SELECT * FROM wan_interfaces WHERE id != ? AND enabled = 1', [id]);
       for (const ow of otherWans) {
         await db.run('UPDATE wan_interfaces SET enabled = 0 WHERE id = ?', [ow.id]);
         await network.removeWanConfig(ow.name);
       }
+      // Set default route through this WAN
+      const resolvedGw = applyResult.gateway || await network.getWanGateway(wan.name);
+      if (resolvedGw) {
+        await execPromise(`ip route del default 2>/dev/null || true`).catch(() => {});
+        await execPromise(`ip route add default via ${resolvedGw} dev ${wan.name}`).catch(() => {});
+      }
+    } else if (topology === 'multi') {
+      // Re-apply ECMP/PCC load balancing
+      const enabledWans = await db.all('SELECT * FROM wan_interfaces WHERE enabled = 1');
+      if (enabledWans.length >= 2) {
+        await applyMultiWanConfig({ enabled: true, mode: 'ecmp', pcc_method: 'both_addresses', interfaces: [], topology: 'multi' });
+      }
     }
 
-    const result = await network.applyWanConfig(wan);
-
-    // Update live status
+    // Update live status in DB
     const status = await network.getWanStatus(wan.name);
-    await db.run('UPDATE wan_interfaces SET status = ?, ip_address = ?, updated_at = datetime("now") WHERE id = ?',
-      [status.status, status.ip, id]);
+    const resolvedGateway = applyResult.gateway || await network.getWanGateway(wan.name);
+    await db.run('UPDATE wan_interfaces SET status = ?, ip_address = ?, gateway = ?, updated_at = datetime("now") WHERE id = ?',
+      [status.status, status.ip || applyResult.ip, resolvedGateway, id]);
 
-    res.json({ success: result.success, error: result.error, status });
+    res.json({ success: applyResult.success !== false, error: applyResult.error, status: { status: status.status, ip: status.ip || applyResult.ip }, gateway: resolvedGateway });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -7131,7 +7192,13 @@ app.post('/api/network/vlan/isp', requireAdmin, async (req, res) => {
     newWan.config = JSON.parse(newWan.config || '{}');
 
     // Apply WAN config
-    await network.applyWanConfig(newWan);
+    const applyResult = await network.applyWanConfig(newWan);
+    // Store resolved gateway/status
+    if (applyResult && applyResult.success) {
+      const resolvedGw = applyResult.gateway || await network.getWanGateway(vlanName);
+      await db.run('UPDATE wan_interfaces SET gateway = ?, ip_address = ?, status = ? WHERE id = ?',
+        [resolvedGw, applyResult.ip || null, applyResult.status || 'down', result.lastID]).catch(() => {});
+    }
 
     res.json({ success: true, name: vlanName, wan: newWan });
   } catch (err) {
@@ -7190,7 +7257,13 @@ async function bootupRestore(isRestricted = false) {
     for (const w of wans) {
       console.log(`[AJC] Restoring WAN ${w.name} (${w.type})...`);
       w.config = JSON.parse(w.config || '{}');
-      await network.applyWanConfig(w).catch(e => console.error(`[AJC] WAN Restore Failed: ${e.message}`));
+      const applyResult = await network.applyWanConfig(w).catch(e => { console.error(`[AJC] WAN Restore Failed: ${e.message}`); return null; });
+      // Store resolved gateway and status
+      if (applyResult && applyResult.success) {
+        const resolvedGw = applyResult.gateway || await network.getWanGateway(w.name);
+        await db.run('UPDATE wan_interfaces SET gateway = ?, ip_address = ?, status = ? WHERE id = ?',
+          [resolvedGw, applyResult.ip || null, applyResult.status || 'down', w.id]).catch(() => {});
+      }
     }
   } catch (e) { console.error('[AJC] Failed to restore WAN interfaces', e); }
 
