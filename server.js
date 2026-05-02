@@ -7369,8 +7369,15 @@ async function applyMultiWanConfig(config) {
         // 1. Cleanup existing rules
         await run('iptables -t mangle -F AJC_MULTIWAN');
         await run('iptables -t mangle -D PREROUTING -j AJC_MULTIWAN');
+        
+        // Clean up any individual WAN NAT rules to prevent conflicts before re-applying
+        const dbWansAll = await db.all('SELECT name FROM wan_interfaces');
+        for (const w of dbWansAll) {
+            await run(`iptables -t nat -D POSTROUTING -o ${w.name} -j MASQUERADE`);
+            await run(`iptables -t nat -D POSTROUTING -o ${w.name} -m conntrack --ctstate NEW -j MASQUERADE`);
+        }
 
-        // Also cleanup any PCC ip rules and routing tables
+        // Clean up any PCC ip rules and routing tables
         for (let mark = 1; mark <= 10; mark++) {
           const tableId = 100 + mark;
           while (true) {
@@ -7378,6 +7385,13 @@ async function applyMultiWanConfig(config) {
           }
           await run(`ip route flush table ${tableId}`);
         }
+
+        // 1.1 CRITICAL: Ensure local traffic to the machine itself ALWAYS uses the main routing table.
+        // This prevents portal traffic from being "leaked" to a WAN interface in Multi-WAN mode.
+        try {
+          await run('ip rule del pref 100 2>/dev/null || true');
+          await run('ip rule add pref 100 lookup main');
+        } catch (e) {}
 
         // If disabled or single topology, restore simple default route and stop
         if (!config.enabled || config.topology === 'single') {
@@ -7477,8 +7491,15 @@ async function applyMultiWanConfig(config) {
             let routeCmd = 'ip route replace default scope global';
             for (const iface of validIfaces) {
                 routeCmd += ` nexthop via ${iface.gateway} dev ${iface.interface} weight ${iface.weight}`;
+                // Ensure NAT exists for this nexthop
+                await run(`iptables -t nat -C POSTROUTING -o ${iface.interface} -j MASQUERADE 2>/dev/null || iptables -t nat -A POSTROUTING -o ${iface.interface} -j MASQUERADE`);
             }
             await run(routeCmd);
+        }
+        
+        // Final sanity check: Ensure all enabled WANs have a NAT rule
+        for (const iface of validIfaces) {
+            await run(`iptables -t nat -C POSTROUTING -o ${iface.interface} -j MASQUERADE 2>/dev/null || iptables -t nat -A POSTROUTING -o ${iface.interface} -j MASQUERADE`);
         }
         
         await run('ip route flush cache');
