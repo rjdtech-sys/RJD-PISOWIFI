@@ -7,7 +7,7 @@
 Run this command in your terminal to install all dependencies and the RJD PISOWIFI system:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/Djnirds1984/RJD-PISOWIFI-Management-System/main/install.sh | sudo bash
+curl -sSL https://raw.githubusercontent.com/rjdtech-sys/rjdpisowifi-installer/refs/heads/main/install.sh | sudo bash
 ```
 
 ### Manual Installation
@@ -20,8 +20,8 @@ curl -sSL https://raw.githubusercontent.com/Djnirds1984/RJD-PISOWIFI-Management-
 
 2. **Clone the Repository**:
    ```bash
-   git clone https://github.com/Djnirds1984/RJD-PISOWIFI-Management-System.git
-   cd RJD-PISOWIFI-Management-System
+   git clone https://github.com/rjdtech-sys/RJD-PISOWIFI.git
+   cd RJD-PISOWIFI
    ```
 
 3. **Install Node Modules**:
