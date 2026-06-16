@@ -40,12 +40,12 @@ Since ADB is already installed, you can manually set Device Owner mode:
 
 4. **Install the phone rental app** (if not already installed):
    ```bash
-   adb install /opt/ajc-pisowifi/android/phone-rental-app/AJC-Phone-Rental-v2.1.0-SmartUpdater.apk
+   adb install /opt/rjd-pisowifi/android/phone-rental-app/RJD-Phone-Rental-v2.1.0-SmartUpdater.apk
    ```
 
 5. **Set Device Owner:**
    ```bash
-   adb shell dpm set-device-owner com.ajcpisowifi.phonerental/.admin.KioskDeviceAdmin
+   adb shell dpm set-device-owner com.rjdpisowifi.phonerental/.admin.KioskDeviceAdmin
    ```
 
 6. **Verify:**
@@ -55,7 +55,7 @@ Since ADB is already installed, you can manually set Device Owner mode:
 
 ### To Remove Device Owner:
 ```bash
-adb shell dpm remove-active-admin com.ajcpisowifi.phonerental/.admin.KioskDeviceAdmin
+adb shell dpm remove-active-admin com.rjdpisowifi.phonerental/.admin.KioskDeviceAdmin
 ```
 
 ### Troubleshooting:

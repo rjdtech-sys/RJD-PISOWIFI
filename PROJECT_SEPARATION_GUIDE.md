@@ -2,7 +2,7 @@
 
 ## 🎯 Overview
 
-Your AJC PisoWiFi system is now split into **TWO separate projects**:
+Your RJD PisoWiFi system is now split into **TWO separate projects**:
 
 ### 1. **Edge Service** (Orange Pi - Local Hardware)
 - **Location**: Current project root (this folder)
@@ -23,7 +23,7 @@ Your AJC PisoWiFi system is now split into **TWO separate projects**:
 ### What STAYS in this project:
 
 ```
-AJC-PISOWIFI-Management-System/  ← Edge Service
+RJD-PISOWIFI-Management-System/  ← Edge Service
 ├── lib/
 │   ├── gpio.js              ✅ Hardware control
 │   ├── network.js           ✅ Network management  
@@ -63,10 +63,10 @@ AJC-PISOWIFI-Management-System/  ← Edge Service
 
 ## 🌐 New Project (Cloud Hosted)
 
-### Create a NEW repository: `ajc-vendor-dashboard`
+### Create a NEW repository: `rjd-vendor-dashboard`
 
 ```
-ajc-vendor-dashboard/  ← Cloud Dashboard
+rjd-vendor-dashboard/  ← Cloud Dashboard
 ├── src/
 │   ├── components/
 │   │   ├── VendorLogin.tsx     # Email/password login
@@ -256,17 +256,17 @@ await syncSaleToCloud({
 
 ```bash
 # Create new Vite project
-npm create vite@latest ajc-vendor-dashboard -- --template react-ts
+npm create vite@latest rjd-vendor-dashboard -- --template react-ts
 
-cd ajc-vendor-dashboard
+cd rjd-vendor-dashboard
 
 # Install dependencies
 npm install @supabase/supabase-js
 
 # Copy vendor files from old project
-cp -r ../AJC-PISOWIFI-Management-System/components/Vendor/* src/components/
-cp ../AJC-PISOWIFI-Management-System/lib/supabase-vendor.ts src/lib/
-cp ../AJC-PISOWIFI-Management-System/types.ts src/types/
+cp -r ../RJD-PISOWIFI-Management-System/components/Vendor/* src/components/
+cp ../RJD-PISOWIFI-Management-System/lib/supabase-vendor.ts src/lib/
+cp ../RJD-PISOWIFI-Management-System/types.ts src/types/
 
 # Create .env
 echo "VITE_SUPABASE_URL=https://fuiabtdflbodglfexvln.supabase.co" > .env.local

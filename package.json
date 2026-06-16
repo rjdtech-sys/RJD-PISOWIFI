@@ -1,5 +1,5 @@
 {
-  "name": "ajc-pisowifi",
+  "name": "rjd-pisowifi",
   "version": "3.6.0-ONLINE-STABLE",
   "description": "Enterprise-grade PisoWiFi Management System",
   "main": "server.js",
@@ -38,7 +38,7 @@
   "optionalDependencies": {
     "serialport": "^12.0.0"
   },
-  "author": "AJC",
+  "author": "RJD",
   "license": "ISC",
   "devDependencies": {
     "esbuild": "^0.27.2",

@@ -6,7 +6,7 @@ May 27, 2026
 ## Version Information
 - **Version Name**: 3.9.5
 - **Version Code**: 26
-- **Update File**: `AJC-PisoWiFi-v3.9.5-Update.nxs`
+- **Update File**: `RJD-PisoWiFi-v3.9.5-Update.nxs`
 
 ---
 
@@ -219,7 +219,7 @@ After deploying, verify:
 ### 1. Test Session Expiry
 ```bash
 # Watch logs in real-time
-journalctl -u ajc-pisowifi -f | grep -E "EXPIRED|Blocking"
+journalctl -u rjd-pisowifi -f | grep -E "EXPIRED|Blocking"
 ```
 
 **Expected behavior:**

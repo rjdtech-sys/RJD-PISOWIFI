@@ -26,7 +26,7 @@ BEGIN
 
   FOR i IN 1..batch_size LOOP
     -- Generate random license key
-    new_key := 'AJC-' || 
+    new_key := 'RJD-' || 
                substring(md5(random()::text || clock_timestamp()::text) from 1 for 8) || '-' ||
                substring(md5(random()::text || clock_timestamp()::text) from 1 for 8);
     

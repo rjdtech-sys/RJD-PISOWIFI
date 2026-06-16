@@ -169,7 +169,7 @@ function getSessionToken(req) {
     const t = authHeader.split(' ')[1];
     if (t && t.trim()) return t.trim();
   }
-  const cookieToken = getCookie(req, 'ajc_session_token');
+  const cookieToken = getCookie(req, 'rjd_session_token');
   return cookieToken || null;
 }
 
@@ -1182,6 +1182,7 @@ app.get('/api/license/status', async (req, res) => {
       isRevoked,
       hasHadLicense: trialStatus.hasHadLicense || false,
       licenseKey: verification.licenseKey,
+      maxOnlineUsers: verification.maxOnlineUsers || null,
       trial: {
         isActive: trialStatus.isTrialActive,
         hasEnded: trialStatus.trialEnded,
@@ -1925,6 +1926,65 @@ async function getMacFromIp(ip) {
   return null;
 }
 
+function normalizeMaxOnlineUsers(value) {
+  const limit = parseInt(value, 10);
+  return Number.isFinite(limit) && limit > 0 ? limit : null;
+}
+
+async function getNodeMCUMacs() {
+  try {
+    const nodemcuResult = await db.get('SELECT value FROM config WHERE key = ?', ['nodemcuDevices']);
+    const devices = nodemcuResult?.value ? JSON.parse(nodemcuResult.value) : [];
+    if (!Array.isArray(devices)) return [];
+    return devices
+      .map(d => String(d.macAddress || '').toUpperCase())
+      .filter(Boolean);
+  } catch (e) {
+    return [];
+  }
+}
+
+async function countOnlineClientSessions({ excludeMac = null, excludeToken = null } = {}) {
+  const onlineSince = Date.now() - 90000;
+  const rows = await db.all(
+    `SELECT DISTINCT UPPER(s.mac) AS mac, s.token
+     FROM sessions s
+     JOIN wifi_devices wd ON UPPER(wd.mac) = UPPER(s.mac)
+     WHERE s.remaining_seconds > 0
+       AND (s.is_paused = 0 OR s.is_paused IS NULL)
+       AND (wd.is_active = 1 OR wd.last_seen >= ?)`,
+    [onlineSince]
+  );
+
+  const nodemcuMacs = new Set(await getNodeMCUMacs());
+  const currentMac = excludeMac ? String(excludeMac).toUpperCase() : null;
+  const currentToken = excludeToken ? String(excludeToken) : null;
+
+  return rows.filter(row => {
+    if (!row.mac || nodemcuMacs.has(row.mac)) return false;
+    if (currentMac && row.mac === currentMac) return false;
+    if (currentToken && row.token && String(row.token) === currentToken) return false;
+    return true;
+  }).length;
+}
+
+async function enforceMaxOnlineUsers(verification, { mac, token = null } = {}) {
+  const limit = normalizeMaxOnlineUsers(verification?.maxOnlineUsers);
+  if (!limit || !mac) return { allowed: true, limit: null, activeOnlineUsers: null };
+
+  const activeOnlineUsers = await countOnlineClientSessions({ excludeMac: mac, excludeToken: token });
+  if (activeOnlineUsers >= limit) {
+    return {
+      allowed: false,
+      limit,
+      activeOnlineUsers,
+      error: `Online user limit reached. This license allows ${limit} online user${limit === 1 ? '' : 's'} at a time.`
+    };
+  }
+
+  return { allowed: true, limit, activeOnlineUsers };
+}
+
 async function applyRewardsForPurchase(mac, clientIp, pesos) {
   try {
     if (!mac) return;
@@ -2513,7 +2573,7 @@ app.use(async (req, res, next) => {
   }
 
   // FORCE REDIRECT to common domain for session sharing (localStorage)
-  const PORTAL_DOMAIN = 'portal.ajcpisowifi.com';
+  const PORTAL_DOMAIN = 'portal.rjdpisowifi.com';
 
   if (isProbe) {
       // Probes get the file directly to satisfy the CNA
@@ -2580,6 +2640,16 @@ app.get('/api/whoami', async (req, res) => {
          }
        }
      }
+
+    if (!isRevoked && canOperate && mac) {
+      const limitCheck = await enforceMaxOnlineUsers(verification, {
+        mac,
+        token: getSessionToken(req)
+      });
+      if (!limitCheck.allowed) {
+        canInsertCoin = false;
+      }
+    }
   } catch (e) {
     console.error('[WhoAmI] License check error:', e);
   }
@@ -2741,7 +2811,7 @@ app.get('/api/whoami', async (req, res) => {
           await network.blockMAC(sessionByToken.mac, sessionByToken.ip);
           await network.whitelistMAC(mac, clientIp);
           try {
-            res.cookie('ajc_session_token', token, { path: '/', maxAge: 30 * 24 * 60 * 60 * 1000, sameSite: 'lax' });
+            res.cookie('rjd_session_token', token, { path: '/', maxAge: 30 * 24 * 60 * 60 * 1000, sameSite: 'lax' });
           } catch (e) {}
           localRestored = true;
           console.log(`[AUTH] Auto-restore triggered: Session ID=${token} moved from ${sessionByToken.mac} to ${mac}`);
@@ -2996,6 +3066,14 @@ app.post('/api/credits/use', async (req, res) => {
       }
     }
 
+    const limitCheck = await enforceMaxOnlineUsers(verification, {
+      mac,
+      token: getSessionToken(req)
+    });
+    if (!limitCheck.allowed) {
+      return res.status(403).json({ success: false, error: limitCheck.error });
+    }
+
     const totalCreditPesos = device.credit_pesos || 0;
     const totalCreditMinutes = device.credit_minutes || 0;
 
@@ -3130,7 +3208,7 @@ app.post('/api/credits/use', async (req, res) => {
       console.error('[CREDIT] Failed to update firewall on useCredit:', e);
     }
 
-    res.cookie('ajc_session_token', tokenToUse, {
+    res.cookie('rjd_session_token', tokenToUse, {
       httpOnly: false,
       sameSite: 'lax'
     });
@@ -3412,6 +3490,14 @@ app.post('/api/sessions/start', async (req, res) => {
       }
     }
 
+    const limitCheck = await enforceMaxOnlineUsers(verification, {
+      mac,
+      token: getSessionToken(req)
+    });
+    if (!limitCheck.allowed) {
+      return res.status(403).json({ error: limitCheck.error });
+    }
+
     // Check if slot is NodeMCU
     let rate = null;
     let isNodeMCU = false;
@@ -3573,7 +3659,7 @@ app.post('/api/sessions/start', async (req, res) => {
     }
     coinSlotLocks.delete(slot);
     try {
-      res.cookie('ajc_session_token', tokenToUse, { path: '/', maxAge: 30 * 24 * 60 * 60 * 1000, sameSite: 'lax' });
+      res.cookie('rjd_session_token', tokenToUse, { path: '/', maxAge: 30 * 24 * 60 * 60 * 1000, sameSite: 'lax' });
     } catch (e) {}
     res.json({ success: true, mac, token: tokenToUse, message: 'Internet access granted. Please refresh your browser or wait a moment for connection to activate.' });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -3634,7 +3720,7 @@ app.post('/api/sessions/restore', async (req, res) => {
     await network.whitelistMAC(mac, clientIp); // Allow new
     
     try {
-      res.cookie('ajc_session_token', token, { path: '/', maxAge: 30 * 24 * 60 * 60 * 1000, sameSite: 'lax' });
+      res.cookie('rjd_session_token', token, { path: '/', maxAge: 30 * 24 * 60 * 60 * 1000, sameSite: 'lax' });
     } catch (e) {}
     console.log(`[AUTH] User session restored on new MAC: MAC=${mac} | Session ID=${token}`);
     res.json({ success: true, migrated: true, remainingSeconds: session.remaining_seconds + extraTime, isPaused: session.is_paused === 1 });
@@ -5383,7 +5469,7 @@ app.post('/api/system/build-update', requireAdmin, async (req, res) => {
 
     // Add manifest
     const manifest = {
-      type: 'ajc-pisowifi-update',
+      type: 'rjd-pisowifi-update',
       version: version_name,
       version_code: version_code || null,
       created_at: new Date().toISOString(),
@@ -5394,7 +5480,7 @@ app.post('/api/system/build-update', requireAdmin, async (req, res) => {
 
     // Send as download
     const buffer = zip.toBuffer();
-    const filename = `AJC-PisoWiFi-v${version_name}-Update.nxs`;
+    const filename = `RJD-PisoWiFi-v${version_name}-Update.nxs`;
 
     res.set('Content-Type', 'application/octet-stream');
     res.set('Content-Disposition', `attachment; filename=${filename}`);
@@ -5830,7 +5916,7 @@ app.delete('/api/network/vlan/:name', requireAdmin, async (req, res) => {
     // Delete VLAN record from DB
     await db.run('DELETE FROM vlans WHERE name = ?', [vlanName]);
     // Clean up dnsmasq config if exists
-    const dnsmasqConf = `/etc/dnsmasq.d/ajc_${vlanName}.conf`;
+    const dnsmasqConf = `/etc/dnsmasq.d/rjd_${vlanName}.conf`;
     try { const fs = require('fs'); if (fs.existsSync(dnsmasqConf)) fs.unlinkSync(dnsmasqConf); } catch (e) {}
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -5899,7 +5985,7 @@ app.post('/api/zerotier/install', requireAdmin, async (req, res) => {
     zeroTierInstallState.startedAt = Date.now();
     zeroTierInstallState.lastUpdateAt = Date.now();
 
-    // Use official install script. The AJC service is expected to run with sufficient privileges.
+    // Use official install script. The RJD service is expected to run with sufficient privileges.
     const installCommand = 'curl -s https://install.zerotier.com | bash';
 
     zeroTierInstallProcess = spawn('bash', ['-c', installCommand], {
@@ -6103,7 +6189,7 @@ app.post('/api/system/flash-nodemcu', requireAdmin, async (req, res) => {
   const { port } = req.body;
   if (!port) return res.status(400).json({ error: 'Port is required' });
 
-  const firmwarePath = '/opt/ajc-pisowifi/firmware/NodeMCU_ESP8266/build/esp8266.esp8266.huzzah/NodeMCU_ESP8266.ino.bin';
+  const firmwarePath = '/opt/rjd-pisowifi/firmware/NodeMCU_ESP8266/build/esp8266.esp8266.huzzah/NodeMCU_ESP8266.ino.bin';
   
   // Verify firmware exists
   if (!fs.existsSync(firmwarePath)) {
@@ -6279,8 +6365,8 @@ app.get('/api/network/pppoe/users/:id/form.pdf', requireAdmin, async (req, res) 
     const pad = (n) => String(n).padStart(2, '0');
     const generatedText = `${generated_at.getFullYear()}-${pad(generated_at.getMonth() + 1)}-${pad(generated_at.getDate())} ${pad(generated_at.getHours())}:${pad(generated_at.getMinutes())}:${pad(generated_at.getSeconds())}`;
 
-    const company = await settings.getCompanySettings().catch(() => ({ companyName: 'AJC PISOWIFI' }));
-    const companyName = company?.companyName ? String(company.companyName) : 'AJC PISOWIFI';
+    const company = await settings.getCompanySettings().catch(() => ({ companyName: 'RJD PISOWIFI' }));
+    const companyName = company?.companyName ? String(company.companyName) : 'RJD PISOWIFI';
     const pdfPath = await generatePPPoEUserFormPdf({ outputPath, user: { ...user, company_name: companyName, generated_at: generatedText } });
     if (!pdfPath) return res.status(500).json({ error: 'PDF generation unavailable' });
 
@@ -6332,8 +6418,8 @@ app.get('/api/network/pppoe/sales/:id/receipt.pdf', requireAdmin, async (req, re
       [sale.user_id]
     ).catch(() => null);
 
-    const company = await settings.getCompanySettings().catch(() => ({ companyName: 'AJC PISOWIFI' }));
-    const companyName = company?.companyName ? String(company.companyName) : 'AJC PISOWIFI';
+    const company = await settings.getCompanySettings().catch(() => ({ companyName: 'RJD PISOWIFI' }));
+    const companyName = company?.companyName ? String(company.companyName) : 'RJD PISOWIFI';
 
     const safeBase = `AR-PPPOE-${sale.id}-${String(sale.username || '').trim() || 'user'}`
       .replace(/[^a-zA-Z0-9._-]+/g, '_')
@@ -7487,15 +7573,15 @@ async function applyMultiWanConfig(config) {
             try { await execPromise(cmd); } catch (e) { /* ignore */ }
         };
 
-        // 1. Cleanup existing AJC_MULTIWAN chain safely
+        // 1. Cleanup existing RJD_MULTIWAN chain safely
         // First flush the chain (remove all rules inside it)
-        await run('iptables -t mangle -F AJC_MULTIWAN 2>/dev/null || true');
-        // Remove ALL jumps to AJC_MULTIWAN from PREROUTING (loop in case of duplicates)
+        await run('iptables -t mangle -F RJD_MULTIWAN 2>/dev/null || true');
+        // Remove ALL jumps to RJD_MULTIWAN from PREROUTING (loop in case of duplicates)
         for (let i = 0; i < 5; i++) {
-            try { await execPromise('iptables -t mangle -D PREROUTING -j AJC_MULTIWAN'); } catch(e) { break; }
+            try { await execPromise('iptables -t mangle -D PREROUTING -j RJD_MULTIWAN'); } catch(e) { break; }
         }
         // Delete the chain itself so we can recreate it cleanly
-        await run('iptables -t mangle -X AJC_MULTIWAN 2>/dev/null || true');
+        await run('iptables -t mangle -X RJD_MULTIWAN 2>/dev/null || true');
 
         // Clean up any individual WAN NAT rules to prevent conflicts before re-applying
         // Loop to remove ALL duplicates (not just one copy)
@@ -7604,15 +7690,15 @@ async function applyMultiWanConfig(config) {
           return;
         }
 
-        // 2. Create fresh AJC_MULTIWAN chain (deleted above so -N always succeeds)
-        await run('iptables -t mangle -N AJC_MULTIWAN');
+        // 2. Create fresh RJD_MULTIWAN chain (deleted above so -N always succeeds)
+        await run('iptables -t mangle -N RJD_MULTIWAN');
         // Insert jump at position 1 so it runs before other PREROUTING rules
-        await run('iptables -t mangle -I PREROUTING 1 -j AJC_MULTIWAN');
+        await run('iptables -t mangle -I PREROUTING 1 -j RJD_MULTIWAN');
 
         if (config.mode === 'pcc') {
             // Restore Connmark (sticky sessions — same client always uses same WAN)
-            await run('iptables -t mangle -A AJC_MULTIWAN -j CONNMARK --restore-mark');
-            await run('iptables -t mangle -A AJC_MULTIWAN -m mark ! --mark 0 -j RETURN');
+            await run('iptables -t mangle -A RJD_MULTIWAN -j CONNMARK --restore-mark');
+            await run('iptables -t mangle -A RJD_MULTIWAN -m mark ! --mark 0 -j RETURN');
             
             for (let idx = 0; idx < validIfaces.length; idx++) {
                  const iface = validIfaces[idx];
@@ -7620,8 +7706,8 @@ async function applyMultiWanConfig(config) {
                  const every = validIfaces.length;
                  const currentEvery = every - idx;
                  
-                 await run(`iptables -t mangle -A AJC_MULTIWAN -m statistic --mode nth --every ${currentEvery} --packet 0 -j MARK --set-mark ${mark}`);
-                 await run(`iptables -t mangle -A AJC_MULTIWAN -m mark --mark ${mark} -j CONNMARK --save-mark`);
+                 await run(`iptables -t mangle -A RJD_MULTIWAN -m statistic --mode nth --every ${currentEvery} --packet 0 -j MARK --set-mark ${mark}`);
+                 await run(`iptables -t mangle -A RJD_MULTIWAN -m mark --mark ${mark} -j CONNMARK --save-mark`);
                  
                  // Routing Rules
                  const tableId = 100 + mark;
@@ -7988,7 +8074,7 @@ app.post('/api/network/vlan/isp', requireAdmin, async (req, res) => {
 // TC cleanup moved inside server.listen
 
 async function bootupRestore(isRestricted = false) {
-  console.log(`[AJC] Starting System Restoration (Mode: ${isRestricted ? 'RESTRICTED' : 'NORMAL'})...`);
+  console.log(`[RJD] Starting System Restoration (Mode: ${isRestricted ? 'RESTRICTED' : 'NORMAL'})...`);
   
   // Auto-Provision Interfaces & Bridge if needed
   await network.autoProvisionNetwork();
@@ -7997,9 +8083,9 @@ async function bootupRestore(isRestricted = false) {
   // Run BEFORE initFirewall so masquerade rules target a WAN with a valid IP
   const wanDhcpResult = await network.ensureWanDhcp();
   if (wanDhcpResult.success) {
-    console.log(`[AJC] WAN DHCP recovery: OK (${wanDhcpResult.wan} → ${wanDhcpResult.ip})`);
+    console.log(`[RJD] WAN DHCP recovery: OK (${wanDhcpResult.wan} → ${wanDhcpResult.ip})`);
   } else {
-    console.warn(`[AJC] WAN DHCP recovery: FAILED (${wanDhcpResult.error}). Will retry in background.`);
+    console.warn(`[RJD] WAN DHCP recovery: FAILED (${wanDhcpResult.error}). Will retry in background.`);
   }
 
   await network.initFirewall();
@@ -8013,7 +8099,7 @@ async function bootupRestore(isRestricted = false) {
     for (const v of vlans) {
       // If parent interface doesn't exist, this is an orphaned VLAN from a cloned system
       if (!ifaceNames.has(v.parent)) {
-        console.warn(`[AJC] Orphaned VLAN: ${v.name} (parent '${v.parent}' not found). Auto-deleting...`);
+        console.warn(`[RJD] Orphaned VLAN: ${v.name} (parent '${v.parent}' not found). Auto-deleting...`);
         // Delete from OS
         await network.deleteVlan(v.name).catch(() => {});
         // Delete associated hotspot
@@ -8022,18 +8108,18 @@ async function bootupRestore(isRestricted = false) {
         await db.run('DELETE FROM vlans WHERE name = ?', [v.name]).catch(() => {});
         continue;
       }
-      console.log(`[AJC] Restoring VLAN ${v.name} on ${v.parent} ID ${v.id}...`);
-      await network.createVlan(v).catch(e => console.error(`[AJC] VLAN Restore Failed: ${e.message}`));
+      console.log(`[RJD] Restoring VLAN ${v.name} on ${v.parent} ID ${v.id}...`);
+      await network.createVlan(v).catch(e => console.error(`[RJD] VLAN Restore Failed: ${e.message}`));
     }
-  } catch (e) { console.error('[AJC] Failed to load VLANs from DB', e); }
+  } catch (e) { console.error('[RJD] Failed to load VLANs from DB', e); }
 
   // 0.5 Restore WAN Interfaces
   try {
     const wans = await db.all('SELECT * FROM wan_interfaces WHERE enabled = 1');
     for (const w of wans) {
-      console.log(`[AJC] Restoring WAN ${w.name} (${w.type})...`);
+      console.log(`[RJD] Restoring WAN ${w.name} (${w.type})...`);
       w.config = JSON.parse(w.config || '{}');
-      const applyResult = await network.applyWanConfig(w).catch(e => { console.error(`[AJC] WAN Restore Failed: ${e.message}`); return null; });
+      const applyResult = await network.applyWanConfig(w).catch(e => { console.error(`[RJD] WAN Restore Failed: ${e.message}`); return null; });
       // Store resolved gateway and status
       if (applyResult && applyResult.success) {
         const resolvedGw = applyResult.gateway || await network.getWanGateway(w.name);
@@ -8041,20 +8127,20 @@ async function bootupRestore(isRestricted = false) {
           [resolvedGw, applyResult.ip || null, applyResult.status || 'down', w.id]).catch(() => {});
       }
     }
-  } catch (e) { console.error('[AJC] Failed to restore WAN interfaces', e); }
+  } catch (e) { console.error('[RJD] Failed to restore WAN interfaces', e); }
 
   // 1. Restore Bridges
   try {
     const bridges = await db.all('SELECT * FROM bridges');
     for (const b of bridges) {
-      console.log(`[AJC] Restoring Bridge ${b.name}...`);
+      console.log(`[RJD] Restoring Bridge ${b.name}...`);
       await network.createBridge({
         name: b.name,
         members: JSON.parse(b.members),
         stp: Boolean(b.stp)
-      }).catch(e => console.error(`[AJC] Bridge Restore Failed: ${e.message}`));
+      }).catch(e => console.error(`[RJD] Bridge Restore Failed: ${e.message}`));
     }
-  } catch (e) { console.error('[AJC] Failed to load bridges from DB', e); }
+  } catch (e) { console.error('[RJD] Failed to load bridges from DB', e); }
 
   // 2. Restore Hotspots (DNS/DHCP)
   try {
@@ -8067,30 +8153,30 @@ async function bootupRestore(isRestricted = false) {
       // but network.setupHotspot handles redirection.
       // However, we can track the INPUT interface to avoid blatant duplicates in DB
       if (processedInterfaces.has(h.interface)) {
-        console.log(`[AJC] Skipping duplicate hotspot config for ${h.interface}`);
+        console.log(`[RJD] Skipping duplicate hotspot config for ${h.interface}`);
         continue;
       }
       processedInterfaces.add(h.interface);
 
-      console.log(`[AJC] Restoring Hotspot on ${h.interface}...`);
-      await network.setupHotspot(h, true).catch(e => console.error(`[AJC] Hotspot Restore Failed: ${e.message}`));
+      console.log(`[RJD] Restoring Hotspot on ${h.interface}...`);
+      await network.setupHotspot(h, true).catch(e => console.error(`[RJD] Hotspot Restore Failed: ${e.message}`));
     }
     
     // Final dnsmasq restart after all hotspot configs are restored
     if (hotspots.length > 0) {
-      console.log('[AJC] Finalizing DNS/DHCP configuration...');
-      await network.restartDnsmasq().catch(e => console.error(`[AJC] Global dnsmasq restart failed: ${e.message}`));
+      console.log('[RJD] Finalizing DNS/DHCP configuration...');
+      await network.restartDnsmasq().catch(e => console.error(`[RJD] Global dnsmasq restart failed: ${e.message}`));
     }
-  } catch (e) { console.error('[AJC] Failed to load hotspots from DB'); }
+  } catch (e) { console.error('[RJD] Failed to load hotspots from DB'); }
 
   // 3. Restore Wireless APs
   try {
     const wireless = await db.all('SELECT * FROM wireless_settings');
     for (const w of wireless) {
-      console.log(`[AJC] Restoring Wi-Fi AP on ${w.interface}...`);
-      await network.configureWifiAP(w).catch(e => console.error(`[AJC] AP Restore Failed: ${e.message}`));
+      console.log(`[RJD] Restoring Wi-Fi AP on ${w.interface}...`);
+      await network.configureWifiAP(w).catch(e => console.error(`[RJD] AP Restore Failed: ${e.message}`));
     }
-  } catch (e) { console.error('[AJC] Failed to load wireless settings from DB'); }
+  } catch (e) { console.error('[RJD] Failed to load wireless settings from DB'); }
 
   // 3.1 Restore Multi-WAN
   try {
@@ -8099,19 +8185,19 @@ async function bootupRestore(isRestricted = false) {
       mwConfig.interfaces = JSON.parse(mwConfig.interfaces || '[]');
       mwConfig.enabled = !!mwConfig.enabled;
       mwConfig.topology = mwConfig.topology || 'single';
-      console.log('[AJC] Restoring Multi-WAN Configuration...');
+      console.log('[RJD] Restoring Multi-WAN Configuration...');
       await applyMultiWanConfig(mwConfig);
     }
-  } catch (e) { console.error('[AJC] Multi-WAN Restore Failed:', e.message); }
+  } catch (e) { console.error('[RJD] Multi-WAN Restore Failed:', e.message); }
 
   // 3.2 Restore PPPoE Server
   try {
     const pppoeServers = await db.all('SELECT * FROM pppoe_server WHERE enabled = 1');
     for (const s of pppoeServers) {
-      console.log(`[AJC] Restoring PPPoE Server on ${s.interface}...`);
-      await network.startPPPoEServer(s).catch(e => console.error(`[AJC] PPPoE Restore Failed: ${e.message}`));
+      console.log(`[RJD] Restoring PPPoE Server on ${s.interface}...`);
+      await network.startPPPoEServer(s).catch(e => console.error(`[RJD] PPPoE Restore Failed: ${e.message}`));
     }
-  } catch (e) { console.error('[AJC] Failed to load PPPoE server config from DB', e); }
+  } catch (e) { console.error('[RJD] Failed to load PPPoE server config from DB', e); }
 
   // 4. Restore GPIO & Hardware
   const board = await db.get('SELECT value FROM config WHERE key = ?', ['boardType']);
@@ -8181,7 +8267,7 @@ async function bootupRestore(isRestricted = false) {
       nodemcuMacs = devices.map(d => d.macAddress.toUpperCase());
     }
   } catch (e) {
-    console.warn('[AJC] Failed to load NodeMCU devices for whitelisting:', e.message);
+    console.warn('[RJD] Failed to load NodeMCU devices for whitelisting:', e.message);
   }
 
   const sessions = await db.all('SELECT mac, ip FROM sessions WHERE remaining_seconds > 0 ORDER BY connected_at DESC');
@@ -8193,17 +8279,17 @@ async function bootupRestore(isRestricted = false) {
       const devices = JSON.parse(nodemcuResult.value);
       for (const d of devices) {
         if (d.macAddress && d.ipAddress && d.ipAddress !== 'unknown') {
-          console.log(`[AJC] Whitelisting NodeMCU infrastructure: ${d.name} (${d.macAddress} @ ${d.ipAddress})`);
+          console.log(`[RJD] Whitelisting NodeMCU infrastructure: ${d.name} (${d.macAddress} @ ${d.ipAddress})`);
           await network.whitelistMAC(d.macAddress, d.ipAddress);
         }
       }
     }
   } catch (e) {
-    console.warn('[AJC] Failed to whitelist NodeMCU devices:', e.message);
+    console.warn('[RJD] Failed to whitelist NodeMCU devices:', e.message);
   }
 
   if (isRestricted) {
-    console.log('[AJC] System is REVOKED. Limiting client sessions to 1.');
+    console.log('[RJD] System is REVOKED. Limiting client sessions to 1.');
     let clientWhitelistedCount = 0;
     
     for (const s of sessions) {
@@ -8217,11 +8303,11 @@ async function bootupRestore(isRestricted = false) {
       }
 
       if (clientWhitelistedCount < 1) {
-        console.log(`[AJC] Whitelisting primary client: ${mac}`);
+        console.log(`[RJD] Whitelisting primary client: ${mac}`);
         await network.whitelistMAC(s.mac, s.ip);
         clientWhitelistedCount++;
       } else {
-        console.log(`[AJC] Blocking secondary client due to revocation: ${mac}`);
+        console.log(`[RJD] Blocking secondary client due to revocation: ${mac}`);
         await network.blockMAC(s.mac, s.ip);
       }
     }
@@ -8229,7 +8315,7 @@ async function bootupRestore(isRestricted = false) {
     for (const s of sessions) await network.whitelistMAC(s.mac, s.ip);
   }
   
-  console.log('[AJC] System Restoration Complete.');
+  console.log('[RJD] System Restoration Complete.');
 }
 
 // VOUCHER API ENDPOINTS
@@ -8464,6 +8550,16 @@ app.post('/api/vouchers/activate', async (req, res) => {
       ? (voucher.duration_days || 30) * 86400
       : voucher.time_minutes * 60;
     const amount = voucher.amount;
+
+    if (!systemHardwareId) systemHardwareId = await getUniqueHardwareId();
+    const verification = await licenseManager.verifyLicense();
+    const limitCheck = await enforceMaxOnlineUsers(verification, { mac, token: requestedToken });
+    if (!limitCheck.allowed) {
+      return res.status(403).json({
+        error: 'Online user limit reached',
+        message: limitCheck.error
+      });
+    }
     
     const existingSessionForMac = await db.get('SELECT * FROM sessions WHERE mac = ?', [mac]);
     if (existingSessionForMac && (existingSessionForMac.remaining_seconds || 0) > 0) {
@@ -8568,7 +8664,7 @@ app.post('/api/vouchers/activate', async (req, res) => {
     console.log(`[VOUCHER] Total time now: ${totalMinutes}m (${totalSeconds}s) | Session ID: ${tokenToUse}`);
     
     try {
-      res.cookie('ajc_session_token', tokenToUse, { path: '/', maxAge: 30 * 24 * 60 * 60 * 1000, sameSite: 'lax' });
+      res.cookie('rjd_session_token', tokenToUse, { path: '/', maxAge: 30 * 24 * 60 * 60 * 1000, sameSite: 'lax' });
     } catch (e) {}
     res.status(200).json({ 
       success: true, 
@@ -8692,8 +8788,8 @@ function startBackgroundTimers() {
 
       console.log(`[PPPoE-Expire] Found ${expiredUsers.length} expired users. Expired pool mode: ${pppoeExpiredPool ? 'ON' : 'OFF'}`);
 
-      const company = await settings.getCompanySettings().catch(() => ({ companyName: 'AJC PISOWIFI' }));
-      const companyName = company?.companyName ? String(company.companyName) : 'AJC PISOWIFI';
+      const company = await settings.getCompanySettings().catch(() => ({ companyName: 'RJD PISOWIFI' }));
+      const companyName = company?.companyName ? String(company.companyName) : 'RJD PISOWIFI';
 
       if (!fs.existsSync(PPPoE_BILLING_DIR)) {
         fs.mkdirSync(PPPoE_BILLING_DIR, { recursive: true });
@@ -8870,7 +8966,7 @@ function startBackgroundTimers() {
   try {
     await db.init();
   } catch (e) {
-    console.error('[AJC] Critical DB Init Error:', e);
+    console.error('[RJD] Critical DB Init Error:', e);
     process.exit(1);
   }
 
@@ -8880,7 +8976,7 @@ function startBackgroundTimers() {
   await serviceManager.initializeServices();
 
   server.listen(80, '0.0.0.0', async () => {
-    console.log('[AJC] System Engine Online @ Port 80');
+    console.log('[RJD] System Engine Online @ Port 80');
   
   // License Gatekeeper - Check if system can operate
   console.log('[License] Checking license and trial status...');
@@ -9062,6 +9158,13 @@ app.post('/api/free-internet/claim', async (req, res) => {
     // Create session for free internet
     const token = crypto.randomBytes(16).toString('hex');
     const seconds = freeConfig.minutes * 60;
+
+    if (!systemHardwareId) systemHardwareId = await getUniqueHardwareId();
+    const verification = await licenseManager.verifyLicense();
+    const limitCheck = await enforceMaxOnlineUsers(verification, { mac, token: getSessionToken(req) });
+    if (!limitCheck.allowed) {
+      return res.status(403).json({ error: limitCheck.error });
+    }
 
     // Check if device exists
     const existingDevice = await db.get('SELECT id FROM wifi_devices WHERE mac = ?', [mac]);
@@ -10834,7 +10937,7 @@ app.get('/api/phone-rental/apk-installer/devices', requireAdmin, async (req, res
 // Get latest APK file
 app.get('/api/phone-rental/apk-installer/latest-apk', requireAdmin, async (req, res) => {
   try {
-    const apkDir = '/opt/ajc-pisowifi/android/phone-rental-app';
+    const apkDir = '/opt/rjd-pisowifi/android/phone-rental-app';
     const { stdout } = await execPromise(`ls -t ${apkDir}/*.apk | head -1`);
     const apkPath = stdout.trim();
     
@@ -10868,7 +10971,7 @@ app.post('/api/phone-rental/apk-installer/install', requireAdmin, async (req, re
     }
     
     // Find latest APK
-    const apkDir = '/opt/ajc-pisowifi/android/phone-rental-app';
+    const apkDir = '/opt/rjd-pisowifi/android/phone-rental-app';
     const { stdout: apkOut } = await execPromise(`ls -t ${apkDir}/*.apk | head -1`);
     const apkPath = apkOut.trim();
     

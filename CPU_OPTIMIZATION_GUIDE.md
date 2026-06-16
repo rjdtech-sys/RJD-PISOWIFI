@@ -1,4 +1,4 @@
-# 🚀 CPU Optimization Guide for AJC PisoWiFi Server
+# 🚀 CPU Optimization Guide for RJD PisoWiFi Server
 
 ## Current Issue
 - **CPU Usage:** 20% at idle (no users)
@@ -172,7 +172,7 @@ ON sessions(remaining_seconds, is_paused);
 
 **Run this command:**
 ```bash
-sqlite3 /opt/ajc-pisowifi/data/devices.sqlite "CREATE INDEX IF NOT EXISTS idx_sessions_active ON sessions(remaining_seconds, is_paused);"
+sqlite3 /opt/rjd-pisowifi/data/devices.sqlite "CREATE INDEX IF NOT EXISTS idx_sessions_active ON sessions(remaining_seconds, is_paused);"
 ```
 
 ---
@@ -183,20 +183,20 @@ Run these commands to apply all optimizations:
 
 ```bash
 # 1. Stop server
-sudo pm2 stop ajc-pisowifi
+sudo pm2 stop rjd-pisowifi
 
 # 2. Add database indexes
-sqlite3 /opt/ajc-pisowifi/data/devices.sqlite <<EOF
+sqlite3 /opt/rjd-pisowifi/data/devices.sqlite <<EOF
 CREATE INDEX IF NOT EXISTS idx_sessions_active ON sessions(remaining_seconds, is_paused);
 CREATE INDEX IF NOT EXISTS idx_sessions_expired ON sessions(expired_at);
 CREATE INDEX IF NOT EXISTS idx_sessions_mac ON sessions(mac);
 EOF
 
 # 3. Set production mode
-echo 'NODE_ENV=production' | sudo tee -a /opt/ajc-pisowifi/.env
+echo 'NODE_ENV=production' | sudo tee -a /opt/rjd-pisowifi/.env
 
 # 4. Restart with optimizations
-sudo pm2 start server.js --name ajc-pisowifi --max-memory-restart 500M
+sudo pm2 start server.js --name rjd-pisowifi --max-memory-restart 500M
 
 # 5. Monitor CPU
 sudo pm2 monit
@@ -234,10 +234,10 @@ sudo pm2 monit
 sudo pm2 list
 
 # View logs for errors
-sudo pm2 logs ajc-pisowifi --lines 50
+sudo pm2 logs rjd-pisowifi --lines 50
 
 # Monitor database performance
-sqlite3 /opt/ajc-pisowifi/data/devices.sqlite "EXPLAIN QUERY PLAN UPDATE sessions SET remaining_seconds = remaining_seconds - 1 WHERE remaining_seconds > 0;"
+sqlite3 /opt/rjd-pisowifi/data/devices.sqlite "EXPLAIN QUERY PLAN UPDATE sessions SET remaining_seconds = remaining_seconds - 1 WHERE remaining_seconds > 0;"
 ```
 
 ---
@@ -255,13 +255,13 @@ sqlite3 /opt/ajc-pisowifi/data/devices.sqlite "EXPLAIN QUERY PLAN UPDATE session
 
 ```bash
 # Rollback by restarting server
-sudo pm2 restart ajc-pisowifi
+sudo pm2 restart rjd-pisowifi
 
 # Check error logs
-sudo pm2 logs ajc-pisowifi --err --lines 100
+sudo pm2 logs rjd-pisowifi --err --lines 100
 
 # Restore database if needed
-cp /opt/ajc-pisowifi/pisowifi.sqlite.backup /opt/ajc-pisowifi/pisowifi.sqlite
+cp /opt/rjd-pisowifi/pisowifi.sqlite.backup /opt/rjd-pisowifi/pisowifi.sqlite
 ```
 
 ---
@@ -270,7 +270,7 @@ cp /opt/ajc-pisowifi/pisowifi.sqlite.backup /opt/ajc-pisowifi/pisowifi.sqlite
 
 1. **Use PM2 cluster mode** (if multi-core):
    ```bash
-   sudo pm2 start server.js -i max --name ajc-pisowifi
+   sudo pm2 start server.js -i max --name rjd-pisowifi
    ```
 
 2. **Set up log rotation**:

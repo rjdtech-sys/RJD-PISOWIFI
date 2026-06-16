@@ -1,5 +1,5 @@
 -- ============================================
--- FULL AJC PISOWIFI MANAGEMENT SYSTEM - SUPABASE SCHEMA
+-- FULL RJD PISOWIFI MANAGEMENT SYSTEM - SUPABASE SCHEMA
 -- ============================================
 -- Complete database schema for the PisoWiFi Management System
 -- Including all tables, functions, policies, and views
@@ -80,6 +80,9 @@ CREATE TABLE IF NOT EXISTS licenses (
   
   -- Expiration (optional)
   expires_at TIMESTAMPTZ,
+
+  -- License plan limits. NULL or 0 means unlimited.
+  max_online_users INTEGER CHECK (max_online_users IS NULL OR max_online_users >= 0),
   
   -- Metadata
   notes TEXT,
@@ -865,11 +868,13 @@ FOR EACH ROW EXECUTE FUNCTION update_network_settings_updated_at_column();
 CREATE OR REPLACE FUNCTION generate_license_keys(
   batch_size INTEGER DEFAULT 1,
   assigned_vendor_id UUID DEFAULT NULL,
-  expiration_months INTEGER DEFAULT NULL
+  expiration_months INTEGER DEFAULT NULL,
+  max_online_users_param INTEGER DEFAULT NULL
 )
 RETURNS TABLE (
   license_key TEXT,
-  expires_at TIMESTAMPTZ
+  expires_at TIMESTAMPTZ,
+  max_online_users INTEGER
 ) AS $$
 DECLARE
   i INTEGER;
@@ -883,7 +888,7 @@ BEGIN
 
   FOR i IN 1..batch_size LOOP
     -- Generate random license key
-    new_key := 'AJC-' || 
+    new_key := 'RJD-' || 
                substring(md5(random()::text || clock_timestamp()::text) from 1 for 8) || '-' ||
                substring(md5(random()::text || clock_timestamp()::text) from 1 for 8);
     
@@ -895,12 +900,25 @@ BEGIN
     END IF;
     
     -- Insert license
-    INSERT INTO licenses (license_key, vendor_id, created_by, expires_at)
-    VALUES (new_key, assigned_vendor_id, auth.uid(), exp_date);
+    INSERT INTO licenses (license_key, vendor_id, created_by, expires_at, max_online_users)
+    VALUES (
+      new_key,
+      assigned_vendor_id,
+      auth.uid(),
+      exp_date,
+      CASE
+        WHEN max_online_users_param IS NOT NULL AND max_online_users_param > 0 THEN max_online_users_param
+        ELSE NULL
+      END
+    );
     
     -- Return the generated key
     license_key := new_key;
     expires_at := exp_date;
+    max_online_users := CASE
+      WHEN max_online_users_param IS NOT NULL AND max_online_users_param > 0 THEN max_online_users_param
+      ELSE NULL
+    END;
     RETURN NEXT;
   END LOOP;
 END;
@@ -1049,7 +1067,7 @@ VALUES ('<vendor-user-id>', 'vendor');
 -- Assign licenses to vendor
 UPDATE licenses 
 SET vendor_id = '<vendor-user-id>'
-WHERE license_key IN ('AJC-xxxxx-xxxxx', 'AJC-yyyyy-yyyyy');
+WHERE license_key IN ('RJD-xxxxx-xxxxx', 'RJD-yyyyy-yyyyy');
 */
 
 -- ============================================
@@ -1128,7 +1146,7 @@ SELECT
 -- Unbind a license (allow reactivation)
 -- UPDATE licenses 
 -- SET hardware_id = NULL, is_active = false, activated_at = NULL
--- WHERE license_key = 'AJC-xxxxx-xxxxx';
+-- WHERE license_key = 'RJD-xxxxx-xxxxx';
 
 -- VENDOR QUERIES
 

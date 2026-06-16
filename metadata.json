@@ -1,5 +1,5 @@
 {
-  "name": "AJC PISOWIFI Management System",
+  "name": "RJD PISOWIFI Management System",
   "description": "A comprehensive management interface for PisoWiFi systems, featuring real-time coin pulse detection, network bridge management, analytics, and an automated system updater.",
   "requestFramePermissions": [
     "camera"

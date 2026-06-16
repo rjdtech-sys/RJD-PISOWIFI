@@ -35,7 +35,7 @@
 #define EEPROM_PIN_MARKER_VALUE 0xA5
 
 // Default values
-#define DEFAULT_AP_SSID "AJC-SubVendo-Setup"
+#define DEFAULT_AP_SSID "RJD-SubVendo-Setup"
 #define DEFAULT_AP_PASSWORD ""
 #define REGISTRATION_INTERVAL 10000 // 10 seconds heartbeat
 
@@ -88,7 +88,7 @@ void loadPinConfiguration();
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("\n--- AJC Sub-Vendo NodeMCU v2.0 ---");
+  Serial.println("\n--- RJD Sub-Vendo NodeMCU v2.0 ---");
 
   // Initialize EEPROM
   EEPROM.begin(512);
@@ -181,7 +181,7 @@ void handleRoot() {
 <html>
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>AJC Sub-Vendo Setup</title>
+    <title>RJD Sub-Vendo Setup</title>
     <style>
         body { font-family: -apple-system, sans-serif; margin: 0; padding: 20px; background-color: #f8fafc; color: #1e293b; }
         .card { max-width: 400px; margin: 0 auto; background: white; padding: 30px; border-radius: 24px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }

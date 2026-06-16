@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * AJC PisoWiFi - Update Package Builder + Auto Upload to Supabase
+ * RJD PisoWiFi - Update Package Builder + Auto Upload to Supabase
  * 
  * Creates a .nxs update file and automatically uploads it
  * to Supabase Storage along with update_release.json.
@@ -116,7 +116,7 @@ function buildUpdatePackage(files, versionName, versionCode) {
 
     // Add update manifest
     const manifest = {
-        type: 'ajc-pisowifi-update',
+        type: 'rjd-pisowifi-update',
         version: versionName || 'unknown',
         version_code: versionCode || null,
         created_at: new Date().toISOString(),
@@ -125,7 +125,7 @@ function buildUpdatePackage(files, versionName, versionCode) {
     };
     zip.addFile('UPDATE_MANIFEST.json', Buffer.from(JSON.stringify(manifest, null, 2)));
 
-    const outputFilename = `AJC-PisoWiFi-v${versionName || 'update'}-Update.nxs`;
+    const outputFilename = `RJD-PisoWiFi-v${versionName || 'update'}-Update.nxs`;
     const outputPath = path.join(PROJECT_ROOT, outputFilename);
     zip.writeZip(outputPath);
 
@@ -260,7 +260,7 @@ async function uploadToSupabase(options) {
             version_code: versionCode,
             version_name: versionName,
             filename: '',
-            release_notes: notes || `AJC PisoWiFi System v${versionName}`,
+            release_notes: notes || `RJD PisoWiFi System v${versionName}`,
             published_at: new Date().toISOString(),
             bucket: bucketName,
         };
@@ -354,7 +354,7 @@ if (!versionName) {
 if (!args.includes('--all') && !args.includes('--files') && !args.includes('--since')) {
     console.log(`
 ╔══════════════════════════════════════════════════════════╗
-║   AJC PisoWiFi - Update Package Builder + Auto Upload    ║
+║   RJD PisoWiFi - Update Package Builder + Auto Upload    ║
 ╚══════════════════════════════════════════════════════════╝
 
 Usage:
@@ -396,7 +396,7 @@ Examples:
 
 Upload Flow:
   --upload uploads these files to Supabase Storage:
-    system/AJC-PisoWiFi-v3.7.0-Update.nxs
+    system/RJD-PisoWiFi-v3.7.0-Update.nxs
     system/update_release.json
 
   --promote also uploads:

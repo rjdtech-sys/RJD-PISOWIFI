@@ -5,7 +5,7 @@
 Your update package for the GPIO 100% CPU usage fix has been successfully created!
 
 ### Files Generated
-1. **Update Package**: `AJC-PisoWiFi-v3.9.4-Update.nxs` (0.09 MB)
+1. **Update Package**: `RJD-PisoWiFi-v3.9.4-Update.nxs` (0.09 MB)
 2. **Update Manifest**: `update_release.json` (version code 25)
 3. **Release Notes**: `RELEASE_NOTES_v3.9.4.md`
 
@@ -30,7 +30,7 @@ node scripts/build-update.js --version 3.9.4 --code 25 --files lib/gpio.js --upl
 ```
 
 **What this does:**
-- Uploads `AJC-PisoWiFi-v3.9.4-Update.nxs` to Supabase Storage
+- Uploads `RJD-PisoWiFi-v3.9.4-Update.nxs` to Supabase Storage
 - Uploads `update_release.json` with version info
 - Machines running v3.9.3 (code 24) will see "Update Available"
 - Machines can install via **Admin → System Updater → Scan Update**
@@ -43,14 +43,14 @@ If you need to fix a specific machine immediately:
 
 1. **Copy the updated file to the machine:**
    ```bash
-   scp lib/gpio.js user@machine-ip:/path/to/AJC-PISOWIFI-Management-System/lib/gpio.js
+   scp lib/gpio.js user@machine-ip:/path/to/RJD-PISOWIFI-Management-System/lib/gpio.js
    ```
 
 2. **SSH into the machine and restart:**
    ```bash
    ssh user@machine-ip
-   cd /path/to/AJC-PISOWIFI-Management-System
-   sudo systemctl restart ajc-pisowifi
+   cd /path/to/RJD-PISOWIFI-Management-System
+   sudo systemctl restart rjd-pisowifi
    ```
 
 3. **Verify the fix:**
@@ -59,7 +59,7 @@ If you need to fix a specific machine immediately:
    top -p $(pgrep -f "node server.js")
    
    # Check logs
-   journalctl -u ajc-pisowifi -f | grep GPIO
+   journalctl -u rjd-pisowifi -f | grep GPIO
    ```
 
 ---
@@ -89,7 +89,7 @@ Look for the Node.js process - CPU should be <5% (was 100% before)
 
 ### 2. Check GPIO Initialization Logs
 ```bash
-journalctl -u ajc-pisowifi | grep -E "\[GPIO\]"
+journalctl -u rjd-pisowifi | grep -E "\[GPIO\]"
 ```
 
 You should see:
@@ -137,13 +137,13 @@ CPU should remain <5% even after 24+ hours of uptime.
 
 ### Issue: CPU still high after update
 **Solution**: 
-1. Restart the service: `sudo systemctl restart ajc-pisowifi`
+1. Restart the service: `sudo systemctl restart rjd-pisowifi`
 2. Check if old process is still running: `ps aux | grep node`
 3. Kill old processes: `sudo pkill -f "node server.js"`
 
 ### Issue: GPIO not initializing
 **Solution**:
-1. Check logs: `journalctl -u ajc-pisowifi | grep GPIO`
+1. Check logs: `journalctl -u rjd-pisowifi | grep GPIO`
 2. Verify GPIO permissions: `ls -la /sys/class/gpio/`
 3. Check board model is correctly configured in settings
 

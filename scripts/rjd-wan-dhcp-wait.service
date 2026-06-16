@@ -1,0 +1,21 @@
+[Unit]
+Description=RJD PisoWiFi WAN DHCP Wait Service
+Documentation=https://github.com/RJD-PISOWIFI
+# Run after network stack is up but before networking is considered online
+After=network.target network-pre.target
+Before=network-online.target multi-user.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/bash /opt/rjd-pisowifi/scripts/rjd-wan-dhcp-wait.sh
+TimeoutStartSec=180
+StandardOutput=journal
+StandardError=journal
+
+# Run as root (needs ip, dhclient, etc.)
+User=root
+
+[Install]
+WantedBy=multi-user.target

@@ -40,7 +40,7 @@ cd "$ANDROID_DIR"
 
 # --- Copy APK ---
 APK_SOURCE="$OUTPUT_DIR/app-debug.apk"
-APK_DEST_NAME="AJC-Phone-Rental-v${VERSION_NAME}-debug.apk"
+APK_DEST_NAME="RJD-Phone-Rental-v${VERSION_NAME}-debug.apk"
 APK_DEST="$RELEASE_DIR/$APK_DEST_NAME"
 
 if [ ! -f "$APK_SOURCE" ]; then

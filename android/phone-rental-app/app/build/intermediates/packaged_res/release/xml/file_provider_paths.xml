@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<paths>
-    <!-- Allow FileProvider to share files from cache dir (downloaded APKs) -->
-    <cache-path name="apk_download" path="." />
-</paths>

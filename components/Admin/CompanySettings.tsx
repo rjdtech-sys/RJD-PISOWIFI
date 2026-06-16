@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { apiClient } from '../../lib/api';
 
 const CompanySettings: React.FC = () => {
-  const [companyName, setCompanyName] = useState('AJC PISOWIFI');
+  const [companyName, setCompanyName] = useState('RJD PISOWIFI');
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);

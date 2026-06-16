@@ -6,7 +6,7 @@ May 27, 2026
 ## Version Information
 - **Version Name**: 3.9.4
 - **Version Code**: 25
-- **Update File**: `AJC-PisoWiFi-v3.9.4-Update.nxs`
+- **Update File**: `RJD-PisoWiFi-v3.9.4-Update.nxs`
 
 ---
 
@@ -98,7 +98,7 @@ All existing functionality has been preserved:
 The update will be pushed to Supabase Storage. Machines running v3.9.3 (code 24) or below will see "Update Available" when they click "Scan Update".
 
 ### Option 2: Manual Update
-1. Download `AJC-PisoWiFi-v3.9.4-Update.nxs`
+1. Download `RJD-PisoWiFi-v3.9.4-Update.nxs`
 2. Place in your system's update directory
 3. Navigate to **Admin → System Updater**
 4. Click "Install Update"
@@ -113,7 +113,7 @@ cp lib/gpio.js lib/gpio.js.bak
 # (Copy the new gpio.js to lib/gpio.js)
 
 # Restart the service
-sudo systemctl restart ajc-pisowifi
+sudo systemctl restart rjd-pisowifi
 ```
 
 ---
@@ -164,7 +164,7 @@ If the GPIO hardware fails or becomes unresponsive:
 
 ## 📞 Support
 If you experience any issues after this update:
-1. Check logs: `journalctl -u ajc-pisowifi -f`
+1. Check logs: `journalctl -u rjd-pisowifi -f`
 2. Verify GPIO: `ls -la /sys/class/gpio/`
 3. Report issue with hardware model and log output
 

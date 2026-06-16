@@ -349,7 +349,7 @@ const LicenseActivation: React.FC<{ licenseStatus: LicenseStatus | null; onActiv
               value={licenseKey}
               onChange={e => setLicenseKey(e.target.value)}
               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs uppercase"
-              placeholder="AJC-XXXX-YYYY-ZZZZ"
+              placeholder="RJD-XXXX-YYYY-ZZZZ"
               required
             />
           </div>

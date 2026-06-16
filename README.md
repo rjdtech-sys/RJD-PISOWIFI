@@ -1,10 +1,10 @@
-# AJC PISOWIFI Management System
+# RJD PISOWIFI Management System
 
 **Enterprise-Grade PisoWiFi Management for the Modern ISP**
 
-Transform your Raspberry Pi or Orange Pi into a powerful, revenue-generating WiFi hotspot. The **AJC PISOWIFI Management System** is engineered for stability, speed, and seamless user experience. Built with a robust Node.js core and real-time WebSockets, it delivers instant coin recognition, advanced traffic shaping, and a sleek mobile-first captive portal.
+Transform your Raspberry Pi or Orange Pi into a powerful, revenue-generating WiFi hotspot. The **RJD PISOWIFI Management System** is engineered for stability, speed, and seamless user experience. Built with a robust Node.js core and real-time WebSockets, it delivers instant coin recognition, advanced traffic shaping, and a sleek mobile-first captive portal.
 
-Whether you're managing a single vending machine or a fleet of hotspots, AJC PISOWIFI provides the professional tools you need: multi-WAN load balancing, VLAN support, and comprehensive analytics — all in one lightweight, high-performance package.
+Whether you're managing a single vending machine or a fleet of hotspots, RJD PISOWIFI provides the professional tools you need: multi-WAN load balancing, VLAN support, and comprehensive analytics — all in one lightweight, high-performance package.
 
 ---
 
@@ -268,4 +268,5 @@ For detailed installation instructions, including automated scripts and manual s
 
 ---
 
-&copy; 2025 AJC PISOWIFI &mdash; Developed for robust public internet delivery.
+&copy; 2025 RJD PISOWIFI &mdash; Developed for robust public internet delivery.
+# RJD-PISOWIFI

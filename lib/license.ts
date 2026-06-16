@@ -8,6 +8,7 @@ interface LicenseRecord {
   hardware_id: string | null;
   vendor_id: string | null;
   is_active: boolean;
+  max_online_users?: number | null;
   activated_at: string | null;
   created_at: string;
 }
@@ -15,6 +16,7 @@ interface LicenseRecord {
 interface LicenseVerification {
   isValid: boolean;
   isActivated: boolean;
+  maxOnlineUsers?: number | null;
   expiresAt?: Date;
   error?: string;
 }
@@ -35,6 +37,11 @@ export class LicenseManager {
     } else {
       console.warn('[License] Supabase credentials not provided. License verification disabled.');
     }
+  }
+
+  private normalizeMaxOnlineUsers(value: unknown): number | null {
+    const parsed = parseInt(String(value), 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
   }
 
   /**
@@ -63,6 +70,7 @@ export class LicenseManager {
                 hardware_id: existingLocal.hardware_id,
                 vendor_id: existingLocal.vendor_id || null,
                 is_active: existingLocal.is_active,
+                max_online_users: this.normalizeMaxOnlineUsers(existingLocal.max_online_users),
                 activated_at: existingLocal.activated_at,
                 created_at: existingLocal.created_at
               }
@@ -96,6 +104,7 @@ export class LicenseManager {
                 hardware_id: hardwareId,
                 vendor_id: null,
                 is_active: true,
+                max_online_users: null,
                 activated_at: new Date().toISOString(),
                 created_at: new Date().toISOString()
               }
@@ -120,6 +129,7 @@ export class LicenseManager {
                 hardware_id: hardwareId,
                 vendor_id: localLicense.vendor_id || null,
                 is_active: true,
+                max_online_users: this.normalizeMaxOnlineUsers(localLicense.max_online_users),
                 activated_at: new Date().toISOString(),
                 created_at: localLicense.created_at
               }
@@ -159,8 +169,8 @@ export class LicenseManager {
         if (existingHardware.license_key === licenseKey) {
           // Also update local database
           await db.run(
-            'INSERT OR REPLACE INTO license_info (hardware_id, license_key, is_active, activated_at, created_at) VALUES (?, ?, 1, ?, ?)', 
-            [hardwareId, existingHardware.license_key, existingHardware.activated_at || new Date().toISOString(), existingHardware.created_at]
+            'INSERT OR REPLACE INTO license_info (hardware_id, license_key, is_active, max_online_users, activated_at, created_at) VALUES (?, ?, 1, ?, ?, ?)', 
+            [hardwareId, existingHardware.license_key, this.normalizeMaxOnlineUsers(existingHardware.max_online_users), existingHardware.activated_at || new Date().toISOString(), existingHardware.created_at]
           );
           
           return { 
@@ -208,6 +218,7 @@ export class LicenseManager {
               hardware_id: hardwareId,
               vendor_id: null,
               is_active: true,
+              max_online_users: null,
               activated_at: new Date().toISOString(),
               created_at: new Date().toISOString()
             }
@@ -244,8 +255,8 @@ export class LicenseManager {
 
       // Store the activation in local database as well for offline access
       await db.run(
-        'INSERT OR REPLACE INTO license_info (hardware_id, license_key, is_active, activated_at, created_at) VALUES (?, ?, 1, ?, ?)', 
-        [hardwareId, updatedLicense.license_key, updatedLicense.activated_at, updatedLicense.created_at]
+        'INSERT OR REPLACE INTO license_info (hardware_id, license_key, is_active, max_online_users, activated_at, created_at) VALUES (?, ?, 1, ?, ?, ?)', 
+        [hardwareId, updatedLicense.license_key, this.normalizeMaxOnlineUsers(updatedLicense.max_online_users), updatedLicense.activated_at, updatedLicense.created_at]
       );
 
       console.log('[License] Device activated successfully');
@@ -281,6 +292,7 @@ export class LicenseManager {
           return { 
             isValid: true, 
             isActivated: true,
+            maxOnlineUsers: this.normalizeMaxOnlineUsers(localLicense.max_online_users),
             expiresAt: localLicense.activated_at ? new Date(localLicense.activated_at) : undefined
           };
         } else {
@@ -323,6 +335,7 @@ export class LicenseManager {
             return { 
               isValid: true, 
               isActivated: true,
+              maxOnlineUsers: this.normalizeMaxOnlineUsers(localLicense.max_online_users),
               expiresAt: localLicense.activated_at ? new Date(localLicense.activated_at) : undefined
             };
           }
@@ -347,6 +360,7 @@ export class LicenseManager {
             return { 
               isValid: true, 
               isActivated: true,
+              maxOnlineUsers: this.normalizeMaxOnlineUsers(localLicense.max_online_users),
               expiresAt: localLicense.activated_at ? new Date(localLicense.activated_at) : undefined
             };
           }
@@ -365,6 +379,7 @@ export class LicenseManager {
       return { 
         isValid: true, 
         isActivated: true,
+        maxOnlineUsers: this.normalizeMaxOnlineUsers(license.max_online_users),
         expiresAt: license.activated_at ? new Date(license.activated_at) : undefined
       };
 
@@ -381,6 +396,7 @@ export class LicenseManager {
           return { 
             isValid: true, 
             isActivated: true,
+            maxOnlineUsers: this.normalizeMaxOnlineUsers(localLicense.max_online_users),
             expiresAt: localLicense.activated_at ? new Date(localLicense.activated_at) : undefined
           };
         }

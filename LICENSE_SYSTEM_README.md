@@ -1,6 +1,6 @@
 # Hardware-Locked Licensing System - Implementation Complete ✅
 
-This document provides an overview of the hardware-locked licensing system that has been implemented for the AJC PisoWiFi Management System.
+This document provides an overview of the hardware-locked licensing system that has been implemented for the RJD PisoWiFi Management System.
 
 ## 🎯 Features Implemented
 
@@ -45,16 +45,16 @@ This document provides an overview of the hardware-locked licensing system that 
 ## 📁 Files Created/Modified
 
 ### New Files:
-1. **[lib/license.ts](file:///c:/Users/AJC/Documents/GitHub/AJC-PISOWIFI-Management-System/lib/license.ts)** - Supabase client and activation logic
-2. **[lib/trial.js](file:///c:/Users/AJC/Documents/GitHub/AJC-PISOWIFI-Management-System/lib/trial.js)** - Local trial management
-3. **[SUPABASE_SETUP.md](file:///c:/Users/AJC/Documents/GitHub/AJC-PISOWIFI-Management-System/SUPABASE_SETUP.md)** - Complete setup documentation
+1. **[lib/license.ts](file:///c:/Users/RJD/Documents/GitHub/RJD-PISOWIFI-Management-System/lib/license.ts)** - Supabase client and activation logic
+2. **[lib/trial.js](file:///c:/Users/RJD/Documents/GitHub/RJD-PISOWIFI-Management-System/lib/trial.js)** - Local trial management
+3. **[SUPABASE_SETUP.md](file:///c:/Users/RJD/Documents/GitHub/RJD-PISOWIFI-Management-System/SUPABASE_SETUP.md)** - Complete setup documentation
 
 ### Modified Files:
-1. **[lib/hardware.ts](file:///c:/Users/AJC/Documents/GitHub/AJC-PISOWIFI-Management-System/lib/hardware.ts)** - Added hardware ID extraction functions
-2. **[lib/db.js](file:///c:/Users/AJC/Documents/GitHub/AJC-PISOWIFI-Management-System/lib/db.js)** - Added license_info table
-3. **[server.js](file:///c:/Users/AJC/Documents/GitHub/AJC-PISOWIFI-Management-System/server.js)** - Added license endpoints and gatekeeper
-4. **[components/Admin/SystemSettings.tsx](file:///c:/Users/AJC/Documents/GitHub/AJC-PISOWIFI-Management-System/components/Admin/SystemSettings.tsx)** - Added license activation UI
-5. **[package.json](file:///c:/Users/AJC/Documents/GitHub/AJC-PISOWIFI-Management-System/package.json)** - Added @supabase/supabase-js dependency
+1. **[lib/hardware.ts](file:///c:/Users/RJD/Documents/GitHub/RJD-PISOWIFI-Management-System/lib/hardware.ts)** - Added hardware ID extraction functions
+2. **[lib/db.js](file:///c:/Users/RJD/Documents/GitHub/RJD-PISOWIFI-Management-System/lib/db.js)** - Added license_info table
+3. **[server.js](file:///c:/Users/RJD/Documents/GitHub/RJD-PISOWIFI-Management-System/server.js)** - Added license endpoints and gatekeeper
+4. **[components/Admin/SystemSettings.tsx](file:///c:/Users/RJD/Documents/GitHub/RJD-PISOWIFI-Management-System/components/Admin/SystemSettings.tsx)** - Added license activation UI
+5. **[package.json](file:///c:/Users/RJD/Documents/GitHub/RJD-PISOWIFI-Management-System/package.json)** - Added @supabase/supabase-js dependency
 
 ## 🗄️ Database Schema
 
@@ -111,7 +111,7 @@ Activates a license key for the current device.
 **Request:**
 ```json
 {
-  "licenseKey": "AJC-abc123def-456ghi789"
+  "licenseKey": "RJD-abc123def-456ghi789"
 }
 ```
 
@@ -151,7 +151,7 @@ Returns the device's unique hardware identifier.
    ```
 
 3. **Run SQL Schema in Supabase**:
-   Execute the SQL provided in [SUPABASE_SETUP.md](file:///c:/Users/AJC/Documents/GitHub/AJC-PISOWIFI-Management-System/SUPABASE_SETUP.md)
+   Execute the SQL provided in [SUPABASE_SETUP.md](file:///c:/Users/RJD/Documents/GitHub/RJD-PISOWIFI-Management-System/SUPABASE_SETUP.md)
 
 4. **Restart the System**:
    ```bash
@@ -275,7 +275,7 @@ Returns the device's unique hardware identifier.
 ```sql
 INSERT INTO licenses (license_key, vendor_id, is_active)
 SELECT 
-  'AJC-' || substring(md5(random()::text) from 1 for 8) || '-' || substring(md5(random()::text) from 1 for 8),
+  'RJD-' || substring(md5(random()::text) from 1 for 8) || '-' || substring(md5(random()::text) from 1 for 8),
   auth.uid(),
   false
 FROM generate_series(1, 10);
@@ -293,7 +293,7 @@ ORDER BY created_at DESC;
 ```sql
 UPDATE licenses
 SET hardware_id = NULL, is_active = false, activated_at = NULL
-WHERE license_key = 'AJC-XXXX-YYYY'
+WHERE license_key = 'RJD-XXXX-YYYY'
   AND vendor_id = auth.uid();
 ```
 
@@ -318,14 +318,14 @@ WHERE license_key = 'AJC-XXXX-YYYY'
 ## 📞 Support
 
 For issues or questions:
-- Review [SUPABASE_SETUP.md](file:///c:/Users/AJC/Documents/GitHub/AJC-PISOWIFI-Management-System/SUPABASE_SETUP.md) for detailed setup
+- Review [SUPABASE_SETUP.md](file:///c:/Users/RJD/Documents/GitHub/RJD-PISOWIFI-Management-System/SUPABASE_SETUP.md) for detailed setup
 - Check server logs for license-related messages
 - Verify environment variables are set correctly
 - Ensure Supabase project is configured properly
 
 ## 📜 License
 
-This licensing system is part of the AJC PisoWiFi Management System v3.6.0-ONLINE-BETA+
+This licensing system is part of the RJD PisoWiFi Management System v3.6.0-ONLINE-BETA+
 
 ---
 

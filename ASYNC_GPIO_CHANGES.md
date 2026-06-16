@@ -167,19 +167,19 @@ After deploying:
 
 1. **Check for unhandled rejections:**
    ```bash
-   journalctl -u ajc-pisowifi | grep -i "unhandled"
+   journalctl -u rjd-pisowifi | grep -i "unhandled"
    ```
    Should return: **(nothing)**
 
 2. **Check GPIO errors are logged:**
    ```bash
-   journalctl -u ajc-pisowifi | grep "\[GPIO\]"
+   journalctl -u rjd-pisowifi | grep "\[GPIO\]"
    ```
    Should show: **Clean error messages if any**
 
 3. **Verify server doesn't crash:**
    ```bash
-   systemctl status ajc-pisowifi
+   systemctl status rjd-pisowifi
    ```
    Should show: **active (running)**
 

@@ -12,7 +12,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onBack }) => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [companySettings, setCompanySettings] = useState<{ companyName: string, companyLogo: string | null }>({
-    companyName: 'AJC PISOWIFI',
+    companyName: 'RJD PISOWIFI',
     companyLogo: null
   });
 

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">AJC Phone Rental</string>
-    <string name="device_admin_label">AJC Phone Rental Kiosk</string>
+    <string name="app_name">RJD Phone Rental</string>
+    <string name="device_admin_label">RJD Phone Rental Kiosk</string>
     <string name="device_admin_description">Enables kiosk mode for phone rental management. Prevents uninstallation and locks the device to the rental app.</string>
 </resources>

@@ -410,7 +410,7 @@ BEGIN
 
   FOR i IN 1..batch_size LOOP
     -- Generate random license key
-    new_key := 'AJC-' || 
+    new_key := 'RJD-' || 
                substring(md5(random()::text || clock_timestamp()::text) from 1 for 8) || '-' ||
                substring(md5(random()::text || clock_timestamp()::text) from 1 for 8);
     
@@ -533,7 +533,7 @@ VALUES ('<vendor-user-id>', 'vendor');
 -- Assign licenses to vendor
 UPDATE licenses 
 SET vendor_id = '<vendor-user-id>'
-WHERE license_key IN ('AJC-xxxxx-xxxxx', 'AJC-yyyyy-yyyyy');
+WHERE license_key IN ('RJD-xxxxx-xxxxx', 'RJD-yyyyy-yyyyy');
 */
 
 -- ============================================
@@ -600,7 +600,7 @@ FROM generate_series(1, 10);
 -- Unbind a license (allow reactivation)
 -- UPDATE licenses 
 -- SET hardware_id = NULL, is_active = false, activated_at = NULL
--- WHERE license_key = 'AJC-xxxxx-xxxxx';
+-- WHERE license_key = 'RJD-xxxxx-xxxxx';
 
 -- VENDOR QUERIES
 

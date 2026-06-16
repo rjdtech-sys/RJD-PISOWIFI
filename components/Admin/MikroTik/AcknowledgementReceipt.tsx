@@ -25,7 +25,7 @@ interface ReceiptProps {
 
 const AcknowledgementReceipt: React.FC<ReceiptProps> = ({
   sale,
-  companyName = 'AJC PisoWiFi',
+  companyName = 'RJD PisoWiFi',
   companyAddress = '',
   companyPhone = '',
   printMode = 'regular',

@@ -32,7 +32,7 @@ const App: React.FC = () => {
 
   const isCurrentlyAdminPath = () => {
     const path = window.location.pathname.toLowerCase();
-    const hasAdminFlag = localStorage.getItem('ajc_admin_mode') === 'true';
+    const hasAdminFlag = localStorage.getItem('rjd_admin_mode') === 'true';
     return path === '/admin' || path === '/admin/' || path.startsWith('/admin/') || hasAdminFlag;
   };
 
@@ -40,7 +40,7 @@ const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   // Initialize activeTab from localStorage if available to persist state across refreshes
   const [activeTab, setActiveTab] = useState<AdminTab>(() => {
-    const savedTab = localStorage.getItem('ajc_admin_last_tab');
+    const savedTab = localStorage.getItem('rjd_admin_last_tab');
     // Simple validation to ensure the saved value is a valid enum value
     if (savedTab && Object.values(AdminTab).includes(savedTab as AdminTab)) {
       return savedTab as AdminTab;
@@ -50,7 +50,7 @@ const App: React.FC = () => {
 
   // Persist activeTab to localStorage whenever it changes
   useEffect(() => {
-    localStorage.setItem('ajc_admin_last_tab', activeTab);
+    localStorage.setItem('rjd_admin_last_tab', activeTab);
   }, [activeTab]);
 
   const [licenseStatus, setLicenseStatus] = useState<{ isLicensed: boolean, isRevoked: boolean, canOperate: boolean }>({ isLicensed: true, isRevoked: false, canOperate: true });
@@ -63,7 +63,7 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [companySettings, setCompanySettings] = useState<{ companyName: string, companyLogo: string | null }>({
-    companyName: 'AJC PISOWIFI',
+    companyName: 'RJD PISOWIFI',
     companyLogo: null
   });
 
@@ -73,7 +73,7 @@ const App: React.FC = () => {
   useEffect(() => {
     const fetchVersion = async () => {
       try {
-        const token = localStorage.getItem('ajc_admin_token');
+        const token = localStorage.getItem('rjd_admin_token');
         const headers: HeadersInit = {};
         if (token) headers['Authorization'] = `Bearer ${token}`;
         const res = await fetch('/api/system/current-version', { headers });
@@ -146,7 +146,7 @@ const App: React.FC = () => {
       setDevices(fetchedDevices);
     } catch (err: any) {
       console.error('Backend connection failed:', err);
-      setError(err.message || 'Connection to AJC Hardware failed');
+      setError(err.message || 'Connection to RJD Hardware failed');
     } finally {
       setLoading(false);
     }
@@ -176,7 +176,7 @@ const App: React.FC = () => {
     
     // Check authentication status
     const checkAuth = async () => {
-      const token = localStorage.getItem('ajc_admin_token');
+      const token = localStorage.getItem('rjd_admin_token');
       if (token) {
         try {
           const res = await fetch('/api/admin/check-auth', {
@@ -186,7 +186,7 @@ const App: React.FC = () => {
           if (data.authenticated) {
             setIsAuthenticated(true);
           } else {
-            localStorage.removeItem('ajc_admin_token');
+            localStorage.removeItem('rjd_admin_token');
             setIsAuthenticated(false);
           }
         } catch (e) {
@@ -231,12 +231,12 @@ const App: React.FC = () => {
     const nextState = !isAdmin;
     setIsAdmin(nextState);
     if (nextState) {
-      localStorage.setItem('ajc_admin_mode', 'true');
+      localStorage.setItem('rjd_admin_mode', 'true');
       window.history.pushState({}, '', '/admin');
       initAdminTheme();
     } else {
-      localStorage.removeItem('ajc_admin_mode');
-      localStorage.removeItem('ajc_admin_token');
+      localStorage.removeItem('rjd_admin_mode');
+      localStorage.removeItem('rjd_admin_token');
       setIsAuthenticated(false);
       window.history.pushState({}, '', '/');
       applyAdminTheme('default');
@@ -262,7 +262,7 @@ const App: React.FC = () => {
       const data = await res.json();
       if (data.success) {
         if (data.token) {
-          localStorage.setItem('ajc_session_token', data.token);
+          localStorage.setItem('rjd_session_token', data.token);
         }
         loadData();
         if (data.message) {
@@ -311,7 +311,7 @@ const App: React.FC = () => {
   };
 
   const restoreSession = async (retries = 5) => {
-    const sessionToken = localStorage.getItem('ajc_session_token');
+    const sessionToken = localStorage.getItem('rjd_session_token');
     if (sessionToken) {
       try {
         const res = await fetch('/api/sessions/restore', {
@@ -343,7 +343,7 @@ const App: React.FC = () => {
         } else if (res.status === 404) {
           // Token invalid/expired - only remove if we are sure
           console.log('[Session] Token expired or invalid');
-          localStorage.removeItem('ajc_session_token');
+          localStorage.removeItem('rjd_session_token');
         }
       } catch (e) {
         console.error('Failed to restore session:', e);
@@ -360,7 +360,7 @@ const App: React.FC = () => {
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-blue-400 font-bold tracking-widest uppercase text-xs">AJC Core Initializing...</p>
+          <p className="text-blue-400 font-bold tracking-widest uppercase text-xs">RJD Core Initializing...</p>
         </div>
       </div>
     );
@@ -477,7 +477,7 @@ const App: React.FC = () => {
               <div className={`admin-sidebar-footer p-4 border-t border-white/5 bg-black/20 ${sidebarOpen ? 'block' : 'hidden md:block'}`}>
                  <div className="flex flex-col gap-3">
                    <div className="flex flex-col">
-                      <span className="text-white font-black text-sm tracking-tighter uppercase leading-none">AJC PISOWIFI</span>
+                      <span className="text-white font-black text-sm tracking-tighter uppercase leading-none">RJD PISOWIFI</span>
                       {sidebarOpen && <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest mt-0.5">{systemVersion || 'v3.7.8-STABLE'}</span>}
                    </div>
                    
@@ -559,7 +559,7 @@ const App: React.FC = () => {
         ) : (
           <Login 
             onLoginSuccess={(token) => {
-              localStorage.setItem('ajc_admin_token', token);
+              localStorage.setItem('rjd_admin_token', token);
               setIsAuthenticated(true);
               initAdminTheme();
             }} 

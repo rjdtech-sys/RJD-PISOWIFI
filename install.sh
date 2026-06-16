@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# AJC PISOWIFI - Automated Installation Script v3.6.0-ONLINE-STABLE
+# RJD PISOWIFI - Automated Installation Script v3.6.0-ONLINE-STABLE
 # Hardware Support: Raspberry Pi, Orange Pi, x86_64
 # Process Manager: PM2
 
@@ -14,7 +14,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 echo -e "${BLUE}==============================================${NC}"
-echo -e "${BLUE}   AJC PISOWIFI SYSTEM INSTALLER v3.6.0-ONLINE-BETA ${NC}"
+echo -e "${BLUE}   RJD PISOWIFI SYSTEM INSTALLER v3.6.0-ONLINE-BETA ${NC}"
 echo -e "${BLUE}==============================================${NC}"
 
 # Check for root
@@ -98,7 +98,7 @@ if apt-get install -y esptool; then
 elif apt-get install -y python3-esptool; then
     echo -e "${BLUE}python3-esptool installed via apt.${NC}"
 else
-    ESPTOOL_VENV="/opt/ajc-esptool-venv"
+    ESPTOOL_VENV="/opt/rjd-esptool-venv"
     python3 -m venv "$ESPTOOL_VENV"
     "$ESPTOOL_VENV/bin/python" -m pip install --no-input esptool
     ln -sf "$ESPTOOL_VENV/bin/esptool" /usr/local/bin/esptool
@@ -138,7 +138,7 @@ if ! python3 -c "import distutils.version" >/dev/null 2>&1; then
 fi
 
 if ! python3 -c "import distutils.version" >/dev/null 2>&1; then
-    PY_VENV="/opt/ajc-python-venv"
+    PY_VENV="/opt/rjd-python-venv"
     python3 -m venv "$PY_VENV"
     "$PY_VENV/bin/python" -m pip install --no-input --upgrade pip setuptools
     export PYTHON="$PY_VENV/bin/python"
@@ -149,10 +149,10 @@ else
 fi
 
 echo -e "${GREEN}[5/8] Preparing Project Directory...${NC}"
-INSTALL_DIR="/opt/ajc-pisowifi"
+INSTALL_DIR="/opt/rjd-pisowifi"
 if [ ! -d "$INSTALL_DIR" ]; then
     echo -e "${YELLOW}Cloning repository...${NC}"
-    git clone https://github.com/Djnirds1984/AJC-PISOWIFI-Management-System.git "$INSTALL_DIR"
+    git clone https://github.com/Djnirds1984/RJD-PISOWIFI-Management-System.git "$INSTALL_DIR"
 fi
 cd "$INSTALL_DIR"
 
@@ -185,8 +185,8 @@ npm run build
 # fi
 
 echo -e "${GREEN}[7/8] Finalizing System Persistence...${NC}"
-pm2 delete ajc-pisowifi 2>/dev/null || true
-pm2 start server.js --name "ajc-pisowifi"
+pm2 delete rjd-pisowifi 2>/dev/null || true
+pm2 start server.js --name "rjd-pisowifi"
 pm2 save
 
 PM2_STARTUP=$(pm2 startup systemd -u root --hp /root | grep "sudo env")
@@ -202,12 +202,12 @@ setcap 'cap_net_bind_service,cap_net_admin,cap_net_raw+ep' $(eval readlink -f $(
 
 # Install WAN DHCP wait service (fixes Chromebox/x64 Debian boot issue)
 echo -e "${GREEN}Installing WAN DHCP boot recovery service...${NC}"
-if [ -f "scripts/ajc-wan-dhcp-wait.sh" ]; then
-    chmod +x scripts/ajc-wan-dhcp-wait.sh
-    if [ -f "scripts/ajc-wan-dhcp-wait.service" ]; then
-        cp scripts/ajc-wan-dhcp-wait.service /etc/systemd/system/ajc-wan-dhcp-wait.service
+if [ -f "scripts/rjd-wan-dhcp-wait.sh" ]; then
+    chmod +x scripts/rjd-wan-dhcp-wait.sh
+    if [ -f "scripts/rjd-wan-dhcp-wait.service" ]; then
+        cp scripts/rjd-wan-dhcp-wait.service /etc/systemd/system/rjd-wan-dhcp-wait.service
         systemctl daemon-reload
-        systemctl enable ajc-wan-dhcp-wait.service 2>/dev/null || true
+        systemctl enable rjd-wan-dhcp-wait.service 2>/dev/null || true
         echo -e "  WAN DHCP boot recovery service installed."
     fi
 fi
@@ -217,5 +217,5 @@ echo -e "${GREEN} INSTALLATION COMPLETE! ${NC}"
 echo -e "${BLUE}==============================================${NC}"
 echo -e "Hardware:         ${BOARD}"
 echo -e "Portal:           http://$(hostname -I | awk '{print $1}')"
-echo -e "Check Logs:       pm2 logs ajc-pisowifi"
+echo -e "Check Logs:       pm2 logs rjd-pisowifi"
 echo -e "${BLUE}==============================================${NC}"

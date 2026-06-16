@@ -4,6 +4,107 @@
 -- Separate license system for NodeMCU/Subvendo boards
 -- Each board needs its own license, separate from main machine license
 
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+-- 0. BASE NODEMCU TABLES
+-- These are required before nodemcu_licenses can reference a device.
+CREATE TABLE IF NOT EXISTS public.nodemcu_devices (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  vendor_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  machine_id UUID NOT NULL REFERENCES public.vendors(id) ON DELETE CASCADE,
+  mac_address TEXT NOT NULL,
+  name TEXT,
+  status TEXT DEFAULT 'disconnected' CHECK (status IN ('connected', 'disconnected', 'accepted', 'rejected')),
+  total_pulses INTEGER DEFAULT 0,
+  total_revenue NUMERIC(10,2) DEFAULT 0,
+  authentication_key TEXT,
+  last_seen TIMESTAMPTZ DEFAULT now(),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(machine_id, mac_address)
+);
+
+ALTER TABLE public.nodemcu_devices ADD COLUMN IF NOT EXISTS vendor_id UUID REFERENCES auth.users(id) ON DELETE CASCADE;
+ALTER TABLE public.nodemcu_devices ADD COLUMN IF NOT EXISTS machine_id UUID REFERENCES public.vendors(id) ON DELETE CASCADE;
+ALTER TABLE public.nodemcu_devices ADD COLUMN IF NOT EXISTS mac_address TEXT;
+ALTER TABLE public.nodemcu_devices ADD COLUMN IF NOT EXISTS name TEXT;
+ALTER TABLE public.nodemcu_devices ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'disconnected';
+ALTER TABLE public.nodemcu_devices ADD COLUMN IF NOT EXISTS total_pulses INTEGER DEFAULT 0;
+ALTER TABLE public.nodemcu_devices ADD COLUMN IF NOT EXISTS total_revenue NUMERIC(10,2) DEFAULT 0;
+ALTER TABLE public.nodemcu_devices ADD COLUMN IF NOT EXISTS authentication_key TEXT;
+ALTER TABLE public.nodemcu_devices ADD COLUMN IF NOT EXISTS last_seen TIMESTAMPTZ DEFAULT now();
+ALTER TABLE public.nodemcu_devices ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now();
+ALTER TABLE public.nodemcu_devices ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
+
+CREATE UNIQUE INDEX IF NOT EXISTS nodemcu_devices_machine_id_mac_address_key
+ON public.nodemcu_devices (machine_id, mac_address);
+
+CREATE INDEX IF NOT EXISTS idx_nodemcu_devices_machine_id
+ON public.nodemcu_devices (machine_id);
+
+CREATE INDEX IF NOT EXISTS idx_nodemcu_devices_vendor_id
+ON public.nodemcu_devices (vendor_id);
+
+CREATE INDEX IF NOT EXISTS idx_nodemcu_devices_mac_address
+ON public.nodemcu_devices (mac_address);
+
+CREATE TABLE IF NOT EXISTS public.nodemcu_sales (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  vendor_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  machine_id UUID NOT NULL REFERENCES public.vendors(id) ON DELETE CASCADE,
+  device_id UUID NOT NULL REFERENCES public.nodemcu_devices(id) ON DELETE CASCADE,
+  slot_id INTEGER NOT NULL,
+  amount NUMERIC(10,2) NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE public.nodemcu_sales ADD COLUMN IF NOT EXISTS vendor_id UUID REFERENCES auth.users(id) ON DELETE CASCADE;
+ALTER TABLE public.nodemcu_sales ADD COLUMN IF NOT EXISTS machine_id UUID REFERENCES public.vendors(id) ON DELETE CASCADE;
+ALTER TABLE public.nodemcu_sales ADD COLUMN IF NOT EXISTS device_id UUID REFERENCES public.nodemcu_devices(id) ON DELETE CASCADE;
+ALTER TABLE public.nodemcu_sales ADD COLUMN IF NOT EXISTS slot_id INTEGER;
+ALTER TABLE public.nodemcu_sales ADD COLUMN IF NOT EXISTS amount NUMERIC(10,2);
+ALTER TABLE public.nodemcu_sales ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now();
+
+CREATE INDEX IF NOT EXISTS idx_nodemcu_sales_device_id
+ON public.nodemcu_sales (device_id);
+
+CREATE INDEX IF NOT EXISTS idx_nodemcu_sales_machine_id
+ON public.nodemcu_sales (machine_id);
+
+CREATE INDEX IF NOT EXISTS idx_nodemcu_sales_created_at
+ON public.nodemcu_sales (created_at DESC);
+
+ALTER TABLE public.nodemcu_devices ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.nodemcu_sales ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Vendors can manage their own NodeMCU devices" ON public.nodemcu_devices;
+CREATE POLICY "Vendors can manage their own NodeMCU devices"
+ON public.nodemcu_devices FOR ALL
+TO authenticated
+USING (auth.uid() = vendor_id)
+WITH CHECK (auth.uid() = vendor_id);
+
+DROP POLICY IF EXISTS "Anon can manage nodemcu_devices" ON public.nodemcu_devices;
+CREATE POLICY "Anon can manage nodemcu_devices"
+ON public.nodemcu_devices FOR ALL
+TO anon, authenticated
+USING (true)
+WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Vendors can manage their own NodeMCU sales" ON public.nodemcu_sales;
+CREATE POLICY "Vendors can manage their own NodeMCU sales"
+ON public.nodemcu_sales FOR ALL
+TO authenticated
+USING (auth.uid() = vendor_id)
+WITH CHECK (auth.uid() = vendor_id);
+
+DROP POLICY IF EXISTS "Anon can manage nodemcu_sales" ON public.nodemcu_sales;
+CREATE POLICY "Anon can manage nodemcu_sales"
+ON public.nodemcu_sales FOR ALL
+TO anon, authenticated
+USING (true)
+WITH CHECK (true);
+
 -- 1. NODEMCU LICENSES TABLE
 -- Stores license keys specifically for NodeMCU/Subvendo devices
 CREATE TABLE IF NOT EXISTS nodemcu_licenses (
@@ -45,16 +146,19 @@ CREATE INDEX IF NOT EXISTS idx_nodemcu_licenses_type ON nodemcu_licenses(license
 ALTER TABLE nodemcu_licenses ENABLE ROW LEVEL SECURITY;
 
 -- Policy: Superadmins can do everything
+DROP POLICY IF EXISTS "Superadmins can manage all nodemcu licenses" ON nodemcu_licenses;
 CREATE POLICY "Superadmins can manage all nodemcu licenses"
 ON nodemcu_licenses FOR ALL
 USING (is_superadmin());
 
 -- Policy: Vendors can view their own NodeMCU licenses
+DROP POLICY IF EXISTS "Vendors can view their own nodemcu licenses" ON nodemcu_licenses;
 CREATE POLICY "Vendors can view their own nodemcu licenses"
 ON nodemcu_licenses FOR SELECT
 USING (vendor_id = auth.uid());
 
 -- Policy: Vendors can update their own NodeMCU licenses (for activation)
+DROP POLICY IF EXISTS "Vendors can activate their own nodemcu licenses" ON nodemcu_licenses;
 CREATE POLICY "Vendors can activate their own nodemcu licenses"
 ON nodemcu_licenses FOR UPDATE
 USING (vendor_id = auth.uid())
@@ -339,7 +443,7 @@ BEGIN
 
   -- Calculate expiration status
   IF license_record.expires_at IS NOT NULL THEN
-    days_remaining := GREATEST(0, (license_record.expires_at - now())::int);
+    days_remaining := GREATEST(0, EXTRACT(DAY FROM (license_record.expires_at - now()))::INTEGER);
     is_expired := license_record.expires_at < now();
   ELSE
     days_remaining := NULL;
@@ -402,7 +506,7 @@ BEGIN
     nl.expires_at,
     CASE 
       WHEN nl.expires_at IS NOT NULL 
-      THEN GREATEST(0, (nl.expires_at - now())::int)
+      THEN GREATEST(0, EXTRACT(DAY FROM (nl.expires_at - now()))::INTEGER)
       ELSE NULL
     END as days_remaining,
     nd.status as device_status
@@ -479,6 +583,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS tr_update_nodemcu_license_updated_at ON nodemcu_licenses;
 CREATE TRIGGER tr_update_nodemcu_license_updated_at
 BEFORE UPDATE ON nodemcu_licenses
 FOR EACH ROW EXECUTE FUNCTION update_nodemcu_license_updated_at();

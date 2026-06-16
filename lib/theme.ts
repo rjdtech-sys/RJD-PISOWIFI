@@ -50,9 +50,9 @@ export const THEMES: ThemeConfig[] = [
   }
 ];
 
-export const ADMIN_THEME_KEY = 'ajc_pisowifi_theme';
-export const CUSTOM_THEMES_KEY = 'ajc_pisowifi_custom_themes';
-export const PORTAL_CONFIG_KEY = 'ajc_portal_config';
+export const ADMIN_THEME_KEY = 'rjd_pisowifi_theme';
+export const CUSTOM_THEMES_KEY = 'rjd_pisowifi_custom_themes';
+export const PORTAL_CONFIG_KEY = 'rjd_portal_config';
 
 export interface CustomThemeValues {
   primary: string;
@@ -256,7 +256,7 @@ export interface PortalConfig {
 }
 
 export const DEFAULT_PORTAL_CONFIG: PortalConfig = {
-  title: 'AJC PISOWIFI',
+  title: 'RJD PISOWIFI',
   subtitle: 'Enterprise Internet Gateway',
   primaryColor: '#2563eb',
   secondaryColor: '#1e40af',

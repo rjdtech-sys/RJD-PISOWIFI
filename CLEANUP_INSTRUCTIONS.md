@@ -165,8 +165,8 @@ Create a **NEW Git repository** for the vendor dashboard:
 
 ```bash
 # In a separate directory
-mkdir ajc-vendor-dashboard
-cd ajc-vendor-dashboard
+mkdir rjd-vendor-dashboard
+cd rjd-vendor-dashboard
 
 # Initialize React + TypeScript
 npm create vite@latest . -- --template react-ts
@@ -177,13 +177,13 @@ npm install @supabase/supabase-js
 
 # Copy vendor files from old project
 mkdir -p src/components
-cp -r ../AJC-PISOWIFI-Management-System/components/Vendor/* src/components/
+cp -r ../RJD-PISOWIFI-Management-System/components/Vendor/* src/components/
 
 mkdir -p src/lib
-cp ../AJC-PISOWIFI-Management-System/lib/supabase-vendor.ts src/lib/
+cp ../RJD-PISOWIFI-Management-System/lib/supabase-vendor.ts src/lib/
 
 mkdir -p src/types
-cp ../AJC-PISOWIFI-Management-System/types.ts src/types/
+cp ../RJD-PISOWIFI-Management-System/types.ts src/types/
 
 # Create .env.local
 cat > .env.local << EOF

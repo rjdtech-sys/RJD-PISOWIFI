@@ -4,23 +4,23 @@ plugins {
 }
 
 android {
-    namespace 'com.ajcpisowifi.phonerental'
+    namespace 'com.rjdpisowifi.phonerental'
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.ajcpisowifi.phonerental"
+        applicationId "com.rjdpisowifi.phonerental"
         minSdk 24
         targetSdk 34
-        versionCode 42
-        versionName "3.3.6"
+        versionCode 11
+        versionName "1.1.0"
     }
 
     signingConfigs {
         release {
-            storeFile file('../release.keystore')
-            storePassword 'android'
-            keyAlias 'release'
-            keyPassword 'android'
+            storeFile file('../rjd-release.keystore')
+            storePassword 'rjdfisystem'
+            keyAlias 'rjd-release'
+            keyPassword 'rjdfisystem'
         }
     }
 

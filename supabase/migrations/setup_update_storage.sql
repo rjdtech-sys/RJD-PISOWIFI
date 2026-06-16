@@ -1,5 +1,5 @@
 -- ============================================================
--- AJC PisoWiFi - Supabase Storage Setup for System Updates
+-- RJD PisoWiFi - Supabase Storage Setup for System Updates
 -- ============================================================
 -- Run this in Supabase Dashboard → SQL Editor
 -- This creates the "UPDATE FILE" bucket and sets up policies

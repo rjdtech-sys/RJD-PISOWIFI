@@ -11,7 +11,7 @@ const NetworkSettings: React.FC = () => {
   // State for Wireless AP Setup
   const [newWifi, setNewWifi] = useState<Partial<WirelessConfig & { bridge?: string }>>({
     interface: '',
-    ssid: 'AJC_PISOWIFI',
+    ssid: 'RJD_PISOWIFI',
     password: '',
     channel: 1,
     hw_mode: 'g',

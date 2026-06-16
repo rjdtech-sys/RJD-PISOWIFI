@@ -1,6 +1,6 @@
 # Add project specific ProGuard rules here.
 # Keep API models
--keep class com.ajcpisowifi.phonerental.network.** { *; }
+-keep class com.rjdpisowifi.phonerental.network.** { *; }
 
 # OkHttp
 -dontwarn okhttp3.**

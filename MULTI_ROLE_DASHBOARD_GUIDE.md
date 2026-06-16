@@ -2,7 +2,7 @@
 
 ## 🎯 System Overview
 
-Your AJC PisoWiFi system now supports **3 separate cloud dashboards** with role-based access:
+Your RJD PisoWiFi system now supports **3 separate cloud dashboards** with role-based access:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -121,8 +121,8 @@ SELECT * FROM generate_license_keys(3, '<vendor-user-id>', NULL);
 ```
 license_key              | expires_at
 -------------------------+----------------------
-AJC-a1b2c3d4-e5f6g7h8   | NULL
-AJC-i9j0k1l2-m3n4o5p6   | NULL
+RJD-a1b2c3d4-e5f6g7h8   | NULL
+RJD-i9j0k1l2-m3n4o5p6   | NULL
 ...
 ```
 
@@ -150,7 +150,7 @@ AJC-i9j0k1l2-m3n4o5p6   | NULL
    ```sql
    UPDATE licenses 
    SET vendor_id = '<vendor-user-id>'
-   WHERE license_key IN ('AJC-xxx-xxx', 'AJC-yyy-yyy');
+   WHERE license_key IN ('RJD-xxx-xxx', 'RJD-yyy-yyy');
    ```
 
 ---
@@ -242,7 +242,7 @@ const { data } = await supabase
 **Access Method**:
 ```typescript
 // Client accesses via session token (no auth required)
-const sessionToken = localStorage.getItem('ajc_session_token');
+const sessionToken = localStorage.getItem('rjd_session_token');
 
 const { data } = await supabase
   .from('clients')
@@ -293,16 +293,16 @@ USING (session_token = '<token>')
 ## 📱 Dashboard URLs Structure
 
 ```
-https://superadmin.ajc-pisowifi.com   ← YOUR dashboard
-https://vendor.ajc-pisowifi.com       ← Vendor dashboard
-https://client.ajc-pisowifi.com       ← Client check session
+https://superadmin.rjd-pisowifi.com   ← YOUR dashboard
+https://vendor.rjd-pisowifi.com       ← Vendor dashboard
+https://client.rjd-pisowifi.com       ← Client check session
 ```
 
 Or use path-based routing:
 ```
-https://dashboard.ajc-pisowifi.com/superadmin
-https://dashboard.ajc-pisowifi.com/vendor
-https://dashboard.ajc-pisowifi.com/client
+https://dashboard.rjd-pisowifi.com/superadmin
+https://dashboard.rjd-pisowifi.com/vendor
+https://dashboard.rjd-pisowifi.com/client
 ```
 
 ---
@@ -339,7 +339,7 @@ ORDER BY created_at DESC;
 ```sql
 UPDATE licenses 
 SET hardware_id = NULL, is_active = false, activated_at = NULL
-WHERE license_key = 'AJC-xxxxx-xxxxx';
+WHERE license_key = 'RJD-xxxxx-xxxxx';
 ```
 
 ### View Global Statistics
@@ -351,7 +351,7 @@ SELECT * FROM get_global_stats();
 ```sql
 UPDATE licenses 
 SET vendor_id = '<vendor-user-id>'
-WHERE license_key = 'AJC-xxxxx-xxxxx';
+WHERE license_key = 'RJD-xxxxx-xxxxx';
 ```
 
 ---

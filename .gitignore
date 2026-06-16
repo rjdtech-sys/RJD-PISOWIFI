@@ -12,6 +12,28 @@ dist
 dist-ssr
 *.local
 
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.keystore
+*.jks
+local.properties
+
+# Runtime data
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+data/*.sqlite
+
+# Android/Gradle build output
+.gradle/
+build/
+android/**/.gradle/
+android/**/build/
+*.apk
+*.nxs
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

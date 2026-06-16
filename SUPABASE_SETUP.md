@@ -1,6 +1,6 @@
 # Supabase Licensing System Setup Guide
 
-This guide will help you set up the hardware-locked licensing system for your AJC PisoWiFi Management System using Supabase as the backend.
+This guide will help you set up the hardware-locked licensing system for your RJD PisoWiFi Management System using Supabase as the backend.
 
 ## Prerequisites
 
@@ -55,7 +55,7 @@ As a vendor, you can create license keys for your customers. Here's a SQL exampl
 -- Generate a new license key for a customer
 INSERT INTO licenses (license_key, vendor_id, is_active)
 VALUES (
-  'AJC-' || substring(md5(random()::text) from 1 for 8) || '-' || substring(md5(random()::text) from 1 for 8),
+  'RJD-' || substring(md5(random()::text) from 1 for 8) || '-' || substring(md5(random()::text) from 1 for 8),
   auth.uid(),  -- Your vendor user ID
   false  -- Will become true when customer activates
 );
@@ -63,7 +63,7 @@ VALUES (
 -- Or batch generate multiple keys
 INSERT INTO licenses (license_key, vendor_id, is_active)
 SELECT 
-  'AJC-' || substring(md5(random()::text) from 1 for 8) || '-' || substring(md5(random()::text) from 1 for 8),
+  'RJD-' || substring(md5(random()::text) from 1 for 8) || '-' || substring(md5(random()::text) from 1 for 8),
   auth.uid(),
   false
 FROM generate_series(1, 10);  -- Generate 10 keys
@@ -173,7 +173,7 @@ SET
   hardware_id = NULL,
   is_active = false,
   activated_at = NULL
-WHERE license_key = 'AJC-XXXX-YYYY'
+WHERE license_key = 'RJD-XXXX-YYYY'
   AND vendor_id = auth.uid();
 ```
 
@@ -201,7 +201,7 @@ Returns current license and trial status:
 Activate a license key:
 ```json
 {
-  "licenseKey": "AJC-abc123def-456ghi789"
+  "licenseKey": "RJD-abc123def-456ghi789"
 }
 ```
 
@@ -255,7 +255,7 @@ ALTER TABLE licenses ADD COLUMN expires_at TIMESTAMPTZ;
 -- Create license with 1-year expiration
 INSERT INTO licenses (license_key, vendor_id, expires_at)
 VALUES (
-  'AJC-' || substring(md5(random()::text) from 1 for 8) || '-' || substring(md5(random()::text) from 1 for 8),
+  'RJD-' || substring(md5(random()::text) from 1 for 8) || '-' || substring(md5(random()::text) from 1 for 8),
   auth.uid(),
   now() + interval '1 year'
 );
@@ -270,11 +270,11 @@ WHERE expires_at < now()
 
 For issues or questions:
 - Check the project GitHub repository
-- Contact AJC support team
+- Contact RJD support team
 - Review Supabase documentation at https://supabase.com/docs
 
 ---
 
 **License System Version**: 1.0.0  
 **Last Updated**: January 2026  
-**Compatible with**: AJC PisoWiFi Management System v3.6.0-ONLINE-BETA+
+**Compatible with**: RJD PisoWiFi Management System v3.6.0-ONLINE-BETA+

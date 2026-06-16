@@ -1586,7 +1586,7 @@ const AppUpdateSubPage: React.FC = () => {
     const file = e.target.files?.[0] ?? null;
     setApkFile(file);
     if (file) {
-      // Auto-parse version from filename e.g. AJC-Phone-Rental-v1.6.0-debug.apk
+      // Auto-parse version from filename e.g. RJD-Phone-Rental-v1.6.0-debug.apk
       const match = file.name.match(/v(\d+\.\d+\.\d+)/);
       if (match) setForm(f => ({ ...f, version_name: match[1] }));
     }

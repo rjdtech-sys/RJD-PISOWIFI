@@ -4,10 +4,10 @@
 
 ### Automated Install (Recommended)
 
-Run this command in your terminal to install all dependencies and the AJC PISOWIFI system:
+Run this command in your terminal to install all dependencies and the RJD PISOWIFI system:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/Djnirds1984/AJC-PISOWIFI-Management-System/main/install.sh | sudo bash
+curl -sSL https://raw.githubusercontent.com/Djnirds1984/RJD-PISOWIFI-Management-System/main/install.sh | sudo bash
 ```
 
 ### Manual Installation
@@ -20,8 +20,8 @@ curl -sSL https://raw.githubusercontent.com/Djnirds1984/AJC-PISOWIFI-Management-
 
 2. **Clone the Repository**:
    ```bash
-   git clone https://github.com/Djnirds1984/AJC-PISOWIFI-Management-System.git
-   cd AJC-PISOWIFI-Management-System
+   git clone https://github.com/Djnirds1984/RJD-PISOWIFI-Management-System.git
+   cd RJD-PISOWIFI-Management-System
    ```
 
 3. **Install Node Modules**:
@@ -45,7 +45,7 @@ curl -sSL https://raw.githubusercontent.com/Djnirds1984/AJC-PISOWIFI-Management-
    **Start the Application:**
    ```bash
    # Ensure you are in the project directory
-   sudo pm2 start server.js --name "ajc-pisowifi"
+   sudo pm2 start server.js --name "rjd-pisowifi"
    ```
 
    **Enable Startup Script:**
@@ -69,15 +69,15 @@ curl -sSL https://raw.githubusercontent.com/Djnirds1984/AJC-PISOWIFI-Management-
 
 **Error: `Cannot find module 'express'`**
 This indicates that the project dependencies are not installed.
-1. Navigate to the project directory: `cd /opt/ajc-pisowifi` (or your install path)
+1. Navigate to the project directory: `cd /opt/rjd-pisowifi` (or your install path)
 2. Install dependencies: `npm install`
-3. Restart the system: `sudo pm2 restart ajc-pisowifi`
+3. Restart the system: `sudo pm2 restart rjd-pisowifi`
 
 **Error: `EADDRINUSE: address already in use`**
 Another process is using port 80.
 1. Find the process: `sudo lsof -i :80`
 2. Kill it: `sudo kill -9 <PID>`
-3. Restart: `sudo pm2 restart ajc-pisowifi`
+3. Restart: `sudo pm2 restart rjd-pisowifi`
 
 **Error: `sqlite3` or `serialport` Build Failure**
 If `npm install` fails on ARM boards (Orange Pi/Raspberry Pi) with Python 3.12+:
