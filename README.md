@@ -268,5 +268,5 @@ For detailed installation instructions, including automated scripts and manual s
 
 ---
 
-&copy; 2025 RJD PISOWIFI &mdash; Developed for robust public internet delivery.
+&copy; 2026 RJD PISOWIFI &mdash; Developed for robust public internet delivery.
 # RJD-PISOWIFI
