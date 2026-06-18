@@ -1,8 +1,8 @@
 {
-  "version_code": 1,
-  "version_name": "3.6.0",
+  "version_code": 32,
+  "version_name": "1.1.0",
   "filename": "",
-  "release_notes": "RJD PisoWiFi System v3.6.0\n- Multi-WAN topology mode (Single-WAN / Multi-WAN ECMP/PCC)\n- VLAN ISP support\n- Factory reset full wipe\n- Hotspot session transfer with captive portal auto-close\n- QoS bandwidth enforcement improvements\n- Hardware ID extraction fallback chain",
+  "release_notes": "RJD PisoWiFi System v1.1.0\n- Multi-WAN topology mode (Single-WAN / Multi-WAN ECMP/PCC)\n- VLAN ISP support\n- Factory reset full wipe\n- Hotspot session transfer with captive portal auto-close\n- QoS bandwidth enforcement improvements\n- Hardware ID extraction fallback chain",
   "published_at": "2026-04-29T00:00:00.000Z",
   "bucket": "UPDATE FILE"
 }
