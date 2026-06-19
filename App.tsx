@@ -91,8 +91,9 @@ const App: React.FC = () => {
     const fetchVersion = async () => {
       try {
         const token = getAdminToken();
+        if (!token) return;
         const headers: HeadersInit = {};
-        if (token) headers['Authorization'] = `Bearer ${token}`;
+        headers['Authorization'] = `Bearer ${token}`;
         const res = await fetch('/api/system/current-version', { headers });
         if (res.ok) {
           const data = await res.json();
@@ -133,17 +134,17 @@ const App: React.FC = () => {
         console.warn('Failed to fetch license status');
       }
 
-      const isAdminRoute = isCurrentlyAdminPath();
-      const devicesPromise = isAdminRoute
+      const canLoadAdminData = isCurrentlyAdminPath() && Boolean(getAdminToken());
+      const devicesPromise = canLoadAdminData
         ? apiClient.getWifiDevices().catch(() => [])
         : Promise.resolve([]);
 
       const sessionsPromise = apiClient.getSessions().catch(() => []);
-      const salesSessionsPromise = isAdminRoute
+      const salesSessionsPromise = canLoadAdminData
         ? apiClient.getSalesSessions().catch(() => [])
         : Promise.resolve([]);
       
-      const salesHistoryPromise = isAdminRoute
+      const salesHistoryPromise = canLoadAdminData
         ? apiClient.getSalesHistory().catch(() => [])
         : Promise.resolve([]);
 
@@ -156,7 +157,7 @@ const App: React.FC = () => {
       ]);
       setRates(fetchedRates);
       setActiveSessions(sessions);
-      if (isAdminRoute) {
+      if (canLoadAdminData) {
         setSalesSessions(salesSessionData);
         setSalesHistory(salesHistoryData);
       }
@@ -203,6 +204,7 @@ const App: React.FC = () => {
           if (data.authenticated) {
             storeAdminToken(token);
             setIsAuthenticated(true);
+            loadData();
           } else {
             clearAdminToken();
             setIsAuthenticated(false);
@@ -227,7 +229,7 @@ const App: React.FC = () => {
       try {
         const sessions = await apiClient.getSessions();
         let fetchedDevices: WifiDevice[] = [];
-        if (isCurrentlyAdminPath()) {
+        if (isCurrentlyAdminPath() && getAdminToken()) {
           fetchedDevices = await apiClient.getWifiDevices();
         }
         setActiveSessions(sessions);
@@ -579,6 +581,7 @@ const App: React.FC = () => {
             onLoginSuccess={(token) => {
               storeAdminToken(token);
               setIsAuthenticated(true);
+              loadData();
               initAdminTheme();
             }} 
             onBack={() => handleToggleAdmin()} 
