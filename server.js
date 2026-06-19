@@ -378,6 +378,19 @@ const uploadBackup = multer({
   }
 });
 
+const uploadBackupFile = (req, res, next) => {
+  uploadBackup.single('file')(req, res, (err) => {
+    if (!err) return next();
+
+    const message = err.code === 'LIMIT_FILE_SIZE'
+      ? 'Upload failed: .nxs file is larger than 500MB.'
+      : `Upload failed: ${err.message || 'Invalid or incomplete .nxs upload.'}`;
+
+    console.error('[System Upload] Upload failed:', err);
+    return res.status(400).json({ error: message });
+  });
+};
+
 const NODEMCU_D_PIN_TO_GPIO = {
   D0: 16,
   D1: 5,
@@ -5251,7 +5264,7 @@ app.get('/api/system/backup', requireAdmin, async (req, res) => {
   }
 });
 
-app.post('/api/system/restore', requireAdmin, uploadBackup.single('file'), async (req, res) => {
+app.post('/api/system/restore', requireAdmin, uploadBackupFile, async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   
   try {
@@ -5377,7 +5390,7 @@ async function applyUpdate(filePath, res) {
   }
 }
 
-app.post('/api/system/update', requireAdmin, uploadBackup.single('file'), async (req, res) => {
+app.post('/api/system/update', requireAdmin, uploadBackupFile, async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   await applyUpdate(req.file.path, res);
 });

@@ -14,6 +14,26 @@ interface CurrentVersion {
   version_name: string;
 }
 
+const readResponseBody = async (res: Response) => {
+  const contentType = res.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    return res.json();
+  }
+
+  const text = await res.text();
+  return {
+    error: text
+      ? text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+      : `Request failed with status ${res.status}`
+  };
+};
+
+const getAdminToken = () => {
+  return localStorage.getItem('rjd_admin_token')
+    || localStorage.getItem('ajc_admin_token')
+    || localStorage.getItem('admin_token');
+};
+
 const SystemUpdater: React.FC = () => {
   const [currentVersion, setCurrentVersion] = useState<CurrentVersion | null>(null);
   const [isLoadingVersion, setIsLoadingVersion] = useState(true);
@@ -40,12 +60,12 @@ const SystemUpdater: React.FC = () => {
   const fetchCurrentVersion = async () => {
     setIsLoadingVersion(true);
     try {
-      const token = localStorage.getItem('ajc_admin_token');
+      const token = getAdminToken();
       const headers: HeadersInit = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
       const res = await fetch('/api/system/current-version', { headers });
-      const data = await res.json();
+      const data = await readResponseBody(res);
 
       if (res.ok) {
         setCurrentVersion({ version_code: data.version_code, version_name: data.version_name });
@@ -64,12 +84,12 @@ const SystemUpdater: React.FC = () => {
     setHasUpdate(false);
 
     try {
-      const token = localStorage.getItem('ajc_admin_token');
+      const token = getAdminToken();
       const headers: HeadersInit = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
       const res = await fetch('/api/system/check-update', { headers });
-      const data = await res.json();
+      const data = await readResponseBody(res);
 
       if (res.ok) {
         setHasUpdate(data.has_update);
@@ -102,7 +122,7 @@ const SystemUpdater: React.FC = () => {
 
     setIsInstalling(true);
     try {
-      const token = localStorage.getItem('ajc_admin_token');
+      const token = getAdminToken();
       const headers: HeadersInit = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
@@ -115,7 +135,7 @@ const SystemUpdater: React.FC = () => {
         })
       });
 
-      const data = await res.json();
+      const data = await readResponseBody(res);
 
       if (res.ok) {
         alert('Update installed successfully. The system will restart automatically.');
@@ -133,7 +153,7 @@ const SystemUpdater: React.FC = () => {
   const handleBackup = async () => {
     setIsBackupLoading(true);
     try {
-      const token = localStorage.getItem('ajc_admin_token');
+      const token = getAdminToken();
       const headers: HeadersInit = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
@@ -175,7 +195,7 @@ const SystemUpdater: React.FC = () => {
       const formData = new FormData();
       formData.append('file', file);
 
-      const token = localStorage.getItem('ajc_admin_token');
+      const token = getAdminToken();
       const headers: HeadersInit = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
@@ -185,7 +205,7 @@ const SystemUpdater: React.FC = () => {
         body: formData
       });
 
-      const data = await res.json();
+      const data = await readResponseBody(res);
       if (res.ok) {
         alert('System restore initiated. The system will restart automatically.');
         window.location.reload();
@@ -211,7 +231,7 @@ const SystemUpdater: React.FC = () => {
       const formData = new FormData();
       formData.append('file', file);
 
-      const token = localStorage.getItem('ajc_admin_token');
+      const token = getAdminToken();
       const headers: HeadersInit = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
@@ -221,7 +241,7 @@ const SystemUpdater: React.FC = () => {
         body: formData
       });
 
-      const data = await res.json();
+      const data = await readResponseBody(res);
       if (res.ok) {
         alert('System update initiated. The system will restart automatically.');
         window.location.reload();
