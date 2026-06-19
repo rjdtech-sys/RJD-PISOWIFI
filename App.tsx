@@ -29,6 +29,23 @@ import { apiClient } from './lib/api';
 import { initAdminTheme, setAdminTheme, applyAdminTheme } from './lib/theme';
 
 const App: React.FC = () => {
+  const getAdminToken = () => {
+    return localStorage.getItem('rjd_admin_token')
+      || localStorage.getItem('ajc_admin_token')
+      || localStorage.getItem('admin_token');
+  };
+
+  const storeAdminToken = (token: string) => {
+    localStorage.setItem('rjd_admin_token', token);
+    localStorage.setItem('ajc_admin_token', token);
+    localStorage.setItem('admin_token', token);
+  };
+
+  const clearAdminToken = () => {
+    localStorage.removeItem('rjd_admin_token');
+    localStorage.removeItem('ajc_admin_token');
+    localStorage.removeItem('admin_token');
+  };
 
   const isCurrentlyAdminPath = () => {
     const path = window.location.pathname.toLowerCase();
@@ -73,7 +90,7 @@ const App: React.FC = () => {
   useEffect(() => {
     const fetchVersion = async () => {
       try {
-        const token = localStorage.getItem('rjd_admin_token');
+        const token = getAdminToken();
         const headers: HeadersInit = {};
         if (token) headers['Authorization'] = `Bearer ${token}`;
         const res = await fetch('/api/system/current-version', { headers });
@@ -176,7 +193,7 @@ const App: React.FC = () => {
     
     // Check authentication status
     const checkAuth = async () => {
-      const token = localStorage.getItem('rjd_admin_token');
+      const token = getAdminToken();
       if (token) {
         try {
           const res = await fetch('/api/admin/check-auth', {
@@ -184,9 +201,10 @@ const App: React.FC = () => {
           });
           const data = await res.json();
           if (data.authenticated) {
+            storeAdminToken(token);
             setIsAuthenticated(true);
           } else {
-            localStorage.removeItem('rjd_admin_token');
+            clearAdminToken();
             setIsAuthenticated(false);
           }
         } catch (e) {
@@ -236,7 +254,7 @@ const App: React.FC = () => {
       initAdminTheme();
     } else {
       localStorage.removeItem('rjd_admin_mode');
-      localStorage.removeItem('rjd_admin_token');
+      clearAdminToken();
       setIsAuthenticated(false);
       window.history.pushState({}, '', '/');
       applyAdminTheme('default');
@@ -559,7 +577,7 @@ const App: React.FC = () => {
         ) : (
           <Login 
             onLoginSuccess={(token) => {
-              localStorage.setItem('rjd_admin_token', token);
+              storeAdminToken(token);
               setIsAuthenticated(true);
               initAdminTheme();
             }} 

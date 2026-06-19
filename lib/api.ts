@@ -3,18 +3,29 @@ import { Rate, NetworkInterface, SystemConfig, WanConfig, VlanConfig, WanInterfa
 
 const API_BASE = '/api';
 
+const getAdminToken = () => {
+  return localStorage.getItem('rjd_admin_token')
+    || localStorage.getItem('ajc_admin_token')
+    || localStorage.getItem('admin_token');
+};
+
 const getHeaders = (customHeaders: HeadersInit = {}) => {
   const headers: Record<string, string> = { 
     'Content-Type': 'application/json',
     ...customHeaders as Record<string, string>
   };
-  const token = localStorage.getItem('ajc_admin_token');
+  const token = getAdminToken();
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
   const userToken = (typeof document !== 'undefined')
-    ? (document.cookie.split(';').map(s => s.trim()).find(c => c.startsWith('ajc_session_token='))?.split('=')[1] || localStorage.getItem('ajc_session_token'))
-    : localStorage.getItem('ajc_session_token');
+    ? (
+      document.cookie.split(';').map(s => s.trim()).find(c => c.startsWith('rjd_session_token='))?.split('=')[1]
+      || document.cookie.split(';').map(s => s.trim()).find(c => c.startsWith('ajc_session_token='))?.split('=')[1]
+      || localStorage.getItem('rjd_session_token')
+      || localStorage.getItem('ajc_session_token')
+    )
+    : (localStorage.getItem('rjd_session_token') || localStorage.getItem('ajc_session_token'));
   if (userToken) {
     headers['X-Session-Token'] = userToken;
   }
@@ -1023,7 +1034,7 @@ export const apiClient = {
     
     // Create a Headers instance to properly handle headers
     const headers = new Headers();
-    const token = localStorage.getItem('ajc_admin_token');
+    const token = getAdminToken();
     if (token) {
       headers.append('Authorization', `Bearer ${token}`);
     }
@@ -1162,7 +1173,7 @@ export const apiClient = {
   },
 
   async updateCompanySettings(formData: FormData): Promise<{ companyName: string, companyLogo: string | null }> {
-    const token = localStorage.getItem('ajc_admin_token');
+    const token = getAdminToken();
     const headers: Record<string, string> = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
