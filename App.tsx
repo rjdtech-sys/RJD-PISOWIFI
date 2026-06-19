@@ -496,7 +496,7 @@ const App: React.FC = () => {
                  <div className="flex flex-col gap-3">
                    <div className="flex flex-col">
                       <span className="text-white font-black text-sm tracking-tighter uppercase leading-none">RJD PISOWIFI</span>
-                      {sidebarOpen && <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest mt-0.5">{systemVersion || 'v3.7.8-STABLE'}</span>}
+                      {sidebarOpen && <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest mt-0.5">{systemVersion || 'v1.1.0-ONLINE-STABLE'}</span>}
                    </div>
                    
                   {/* Mobile Exit Button */}
