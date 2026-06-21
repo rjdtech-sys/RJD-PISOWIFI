@@ -5548,42 +5548,97 @@ app.get('/api/system/current-version', requireAdmin, async (req, res) => {
     }
 });
 
-// Check for update by fetching update_release.json from Supabase Storage
+const PUBLIC_SYSTEM_UPDATE_BASE_URL = (process.env.SYSTEM_UPDATE_BASE_URL || 'https://wifi.rjdtech.shop/updates/system').replace(/\/+$/, '');
+
+async function fetchPublicUpdateManifest() {
+    const manifestUrl = `${PUBLIC_SYSTEM_UPDATE_BASE_URL}/update_release.json`;
+    try {
+        const response = await fetch(manifestUrl, {
+            headers: { 'Accept': 'application/json' }
+        });
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        const updateInfo = await response.json();
+        return {
+            updateInfo: {
+                ...updateInfo,
+                bucket: updateInfo.bucket || 'public',
+                public_url: updateInfo.public_url || `${PUBLIC_SYSTEM_UPDATE_BASE_URL}/${updateInfo.filename || ''}`
+            },
+            source: manifestUrl
+        };
+    } catch (e) {
+        console.warn(`[System Update] Public manifest fetch failed (${manifestUrl}): ${e.message}`);
+        return null;
+    }
+}
+
+async function downloadPublicUpdateFile(filename, publicUrl = null) {
+    const safeFile = path.basename(String(filename || ''));
+    if (!safeFile.endsWith('.nxs')) {
+        throw new Error('Invalid update filename');
+    }
+
+    const fileUrl = publicUrl || `${PUBLIC_SYSTEM_UPDATE_BASE_URL}/${safeFile}`;
+    const response = await fetch(fileUrl);
+    if (!response.ok) {
+        throw new Error(`Public update download failed: HTTP ${response.status}`);
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    return Buffer.from(arrayBuffer);
+}
+
+// Check for update by fetching update_release.json from public cloud first, then Supabase Storage
 app.get('/api/system/check-update', requireAdmin, async (req, res) => {
     try {
-        if (!edgeSync.supabase) {
-            return res.status(503).json({ error: 'Cloud sync not configured' });
-        }
-
         // Get current local version
         const metaPath = path.join(__dirname, 'metadata.json');
         const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
         const currentVersionCode = meta.version_code || 0;
 
-        // Try fetching update_release.json from Supabase Storage buckets
+        // Public web-hosted updates are the canonical release channel.
+        let publicManifest = await fetchPublicUpdateManifest();
+        let updateInfo = publicManifest?.updateInfo || null;
+        let foundBucket = updateInfo ? 'public' : null;
+
+        // Fallback: try fetching update_release.json from Supabase Storage buckets
         const buckets = ['UPDATE FILE', 'updates', 'firmware'];
         const paths = ['system/update_release.json', 'update_release.json'];
-        let updateInfo = null;
-        let foundBucket = null;
+        if (!updateInfo && edgeSync.supabase) {
+            for (const bucket of buckets) {
+                for (const filePath of paths) {
+                    try {
+                        const { data, error } = await edgeSync.supabase.storage
+                            .from(bucket)
+                            .download(filePath);
 
-        for (const bucket of buckets) {
-            for (const filePath of paths) {
-                try {
-                    const { data, error } = await edgeSync.supabase.storage
-                        .from(bucket)
-                        .download(filePath);
-
-                    if (!error && data) {
-                        const text = await data.text();
-                        updateInfo = JSON.parse(text);
-                        foundBucket = bucket;
-                        break;
+                        if (!error && data) {
+                            const text = await data.text();
+                            updateInfo = JSON.parse(text);
+                            foundBucket = bucket;
+                            break;
+                        }
+                    } catch (e) {
+                        // Try next path
                     }
-                } catch (e) {
-                    // Try next path
                 }
+                if (updateInfo) break;
             }
-            if (updateInfo) break;
+        }
+
+        // Last local fallback for offline diagnostics.
+        if (!updateInfo) {
+            const localReleasePath = path.join(__dirname, 'latest_release.json');
+            if (fs.existsSync(localReleasePath)) {
+                try {
+                    updateInfo = JSON.parse(fs.readFileSync(localReleasePath, 'utf8'));
+                    if (updateInfo && updateInfo.filename) {
+                        updateInfo.bucket = updateInfo.bucket || 'local';
+                    }
+                } catch (e) {}
+            }
         }
 
         if (!updateInfo) {
@@ -5678,37 +5733,47 @@ app.get('/api/system/available-updates', requireAdmin, async (req, res) => {
 });
 
 app.post('/api/system/download-and-update', requireAdmin, async (req, res) => {
-    const { filename, bucket } = req.body;
+    const { filename, bucket, public_url } = req.body;
     if (!filename) return res.status(400).json({ error: 'Filename is required' });
     // Default to 'UPDATE FILE' if not specified, as requested by user
     const bucketName = bucket || 'UPDATE FILE';
 
     try {
-        if (!edgeSync.supabase) {
-             return res.status(503).json({ error: 'Cloud sync not configured' });
-        }
+        let buffer = null;
 
-        console.log(`[System Update] Downloading ${filename} from bucket ${bucketName}...`);
-        
-        // Try multiple paths: system/ folder first, then root
-        const tryPaths = [`system/${filename}`, filename];
-        let downloadData = null;
-        let downloadError = null;
-        
-        for (const tryPath of tryPaths) {
-            const { data, error } = await edgeSync.supabase.storage
-                .from(bucketName)
-                .download(tryPath);
-            if (!error && data) {
-                downloadData = data;
-                downloadError = null;
-                break;
+        if (bucketName === 'public' || public_url) {
+            console.log(`[System Update] Downloading ${filename} from public update URL...`);
+            buffer = await downloadPublicUpdateFile(filename, public_url);
+        } else {
+            if (!edgeSync.supabase) {
+                 return res.status(503).json({ error: 'Cloud sync not configured' });
             }
-            downloadError = error;
+
+            console.log(`[System Update] Downloading ${filename} from bucket ${bucketName}...`);
+            
+            // Try multiple paths: system/ folder first, then root
+            const tryPaths = [`system/${filename}`, filename];
+            let downloadData = null;
+            let downloadError = null;
+            
+            for (const tryPath of tryPaths) {
+                const { data, error } = await edgeSync.supabase.storage
+                    .from(bucketName)
+                    .download(tryPath);
+                if (!error && data) {
+                    downloadData = data;
+                    downloadError = null;
+                    break;
+                }
+                downloadError = error;
+            }
+
+            if (downloadError || !downloadData) throw downloadError || new Error('File not found');
+
+            const arrayBuffer = await downloadData.arrayBuffer();
+            buffer = Buffer.from(arrayBuffer);
         }
 
-        if (downloadError || !downloadData) throw downloadError || new Error('File not found');
-        
         // Save to temp file
         const tempPath = path.join(__dirname, 'uploads/backups', `cloud_update_${Date.now()}.nxs`);
         
@@ -5716,10 +5781,6 @@ app.post('/api/system/download-and-update', requireAdmin, async (req, res) => {
         const dir = path.dirname(tempPath);
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
-        // Convert Blob/File to Buffer
-        const arrayBuffer = await downloadData.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
-        
         fs.writeFileSync(tempPath, buffer);
         console.log(`[System Update] Downloaded to ${tempPath}`);
         

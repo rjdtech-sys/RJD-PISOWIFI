@@ -7,6 +7,7 @@ interface UpdateInfo {
   release_notes: string;
   published_at: string;
   bucket: string;
+  public_url?: string;
 }
 
 interface CurrentVersion {
@@ -131,7 +132,8 @@ const SystemUpdater: React.FC = () => {
         headers,
         body: JSON.stringify({
           filename: updateInfo.filename,
-          bucket: updateInfo.bucket
+          bucket: updateInfo.bucket,
+          public_url: (updateInfo as any).public_url
         })
       });
 
