@@ -124,7 +124,9 @@ begin
         raise exception 'The 7-day trial for this hardware has already been used';
       end if;
 
-      trial_key := 'RJD-TRIAL-' || upper(substr(encode(gen_random_bytes(8), 'hex'), 1, 16));
+      trial_key := 'RJD-TRIAL-' || upper(substr(md5(
+        random()::text || clock_timestamp()::text || trim(p_hardware_id)
+      ), 1, 16));
       insert into public.licenses (
         license_key, vendor_id, created_by, hardware_id, is_active,
         activated_at, expires_at, license_type, notes
@@ -189,5 +191,32 @@ begin
 end;
 $$;
 
+create or replace function public.register_rjd_vendor_account()
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  account_id uuid := auth.uid();
+begin
+  if account_id is null then
+    raise exception 'Website account authentication is required';
+  end if;
+
+  insert into public.user_roles (user_id, role)
+  values (account_id, 'vendor')
+  on conflict (user_id, role) do nothing;
+
+  return jsonb_build_object(
+    'success', true,
+    'account_id', account_id,
+    'role', 'vendor'
+  );
+end;
+$$;
+
 revoke all on function public.setup_pisowifi_machine(text, text) from public;
 grant execute on function public.setup_pisowifi_machine(text, text) to authenticated;
+revoke all on function public.register_rjd_vendor_account() from public;
+grant execute on function public.register_rjd_vendor_account() to authenticated;
