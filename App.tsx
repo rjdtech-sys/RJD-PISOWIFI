@@ -543,7 +543,7 @@ const App: React.FC = () => {
             <SidebarItem disabled={!licenseStatus.canOperate && !licenseStatus.isRevoked} active={activeTab === AdminTab.Remote} onClick={() => setActiveTab(AdminTab.Remote)} icon="🛰️" label="Remote" collapsed={!sidebarOpen} />
             <SidebarItem active={activeTab === AdminTab.CompanySettings} onClick={() => setActiveTab(AdminTab.CompanySettings)} icon="🏢" label="Company" collapsed={!sidebarOpen} />
             <SidebarItem active={activeTab === AdminTab.System} onClick={() => setActiveTab(AdminTab.System)} icon="⚙️" label="System" collapsed={!sidebarOpen} />
-            <SidebarItem disabled={!licenseStatus.canOperate && !licenseStatus.isRevoked} active={activeTab === AdminTab.Updater} onClick={() => setActiveTab(AdminTab.Updater)} icon="🚀" label="Updater" collapsed={!sidebarOpen} />
+            <SidebarItem disabled={false} active={activeTab === AdminTab.Updater} onClick={() => setActiveTab(AdminTab.Updater)} icon="🚀" label="Updater" collapsed={!sidebarOpen} />
             <SidebarItem disabled={!licenseStatus.canOperate && !licenseStatus.isRevoked} active={activeTab === AdminTab.Tools} onClick={() => setActiveTab(AdminTab.Tools)} icon="🔧" label="Tools" collapsed={!sidebarOpen} />
           </nav>
 
