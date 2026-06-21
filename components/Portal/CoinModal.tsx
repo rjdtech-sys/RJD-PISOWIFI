@@ -30,6 +30,7 @@ const CoinModal: React.FC<Props> = ({
   const [totalPesos, setTotalPesos] = useState(0);
   const [totalMinutes, setTotalMinutes] = useState(0);
   const [isConnected, setIsConnected] = useState(false);
+  const [rejectionMessage, setRejectionMessage] = useState('');
   const didAutoClose = useRef(false);
   const [mode, setMode] = useState<'internet' | 'credit'>('internet');
 
@@ -115,6 +116,7 @@ const CoinModal: React.FC<Props> = ({
 
     const handlePulse = (pesos: number) => {
       console.log(`[COIN] Received Pulse: ₱${pesos}`);
+      setRejectionMessage('');
       
       // Play Audio
       if (audioSrc) {
@@ -147,6 +149,13 @@ const CoinModal: React.FC<Props> = ({
         } else {
           handlePulse(data.pesos);
         }
+      }
+    });
+
+    socket.on('coin-pulse-rejected', (data: { reason?: string }) => {
+      if (selectedSlot !== 'main') return;
+      if (data?.reason === 'NO_ACTIVE_RESERVATION') {
+        setRejectionMessage('Coin was detected but not credited because the coinslot reservation expired. Close this window and tap Insert Coin again.');
       }
     });
 
@@ -231,6 +240,11 @@ const CoinModal: React.FC<Props> = ({
         </div>
 
         <div className="p-6 space-y-6">
+          {rejectionMessage && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-center text-xs font-bold text-red-700">
+              {rejectionMessage}
+            </div>
+          )}
           <div className="flex flex-col gap-4">
             <div className="bg-slate-50 p-4 rounded-3xl text-center border border-slate-100 shadow-inner">
               <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Total Amount</span>

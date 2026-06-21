@@ -23,6 +23,8 @@ interface WanTrafficData {
   rx_rate: number;
   tx_rate: number;
   timestamp: number;
+  status?: 'up' | 'down';
+  ip?: string | null;
   error?: string;
 }
 
@@ -274,7 +276,7 @@ const WanTrafficMonitor: React.FC<{ wans: WanInterface[] }> = ({ wans }) => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
           {wans.map((wan) => {
             const stats = trafficData[wan.name];
-            const isUp = stats && !stats.error;
+            const isUp = stats?.status === 'up' && !stats.error;
 
             return (
               <div

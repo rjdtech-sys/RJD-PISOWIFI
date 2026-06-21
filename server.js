@@ -311,6 +311,11 @@ function recordMainCoinPulse(pesos) {
 
   if (!lock || lock.expiresAt <= Date.now()) {
     console.warn(`[COINSLOT] Ignoring unreserved main pulse: ₱${safePesos}`);
+    io.emit('coin-pulse-rejected', {
+      reason: 'NO_ACTIVE_RESERVATION',
+      pesos: safePesos,
+      timestamp: Date.now()
+    });
     return false;
   }
 
@@ -2209,6 +2214,24 @@ async function getMacFromIp(ip) {
   return null;
 }
 
+async function resolveRequestMac(req) {
+  let clientIp = req.ip ? req.ip.replace('::ffff:', '') : '';
+  if (clientIp === '::1') clientIp = '127.0.0.1';
+
+  let mac = await getMacFromIp(clientIp);
+  const token = getSessionToken(req);
+
+  if (!mac && token) {
+    try {
+      const session = await db.get('SELECT mac FROM sessions WHERE token = ? LIMIT 1', [token]);
+      if (session?.mac) mac = String(session.mac).toUpperCase();
+    } catch (e) {}
+  }
+
+  if (!mac && clientIp === '127.0.0.1') mac = 'DEV-LOCALHOST';
+  return { clientIp, mac, token };
+}
+
 function normalizeMaxOnlineUsers(value) {
   const limit = parseInt(value, 10);
   return Number.isFinite(limit) && limit > 0 ? limit : null;
@@ -3168,13 +3191,9 @@ app.post('/api/coinslot/reserve', async (req, res) => {
     }
   }
 
-  let clientIp = req.ip ? req.ip.replace('::ffff:', '') : '';
-  if (clientIp === '::1') clientIp = '127.0.0.1';
-  let mac = await getMacFromIp(clientIp);
-  if (!mac && clientIp === '127.0.0.1') mac = 'DEV-LOCALHOST';
+  const { clientIp, mac, token } = await resolveRequestMac(req);
   if (!mac) return res.status(400).json({ success: false, error: 'Could not identify your device MAC.' });
 
-  const token = getSessionToken(req);
   const now = Date.now();
   const existing = coinSlotLocks.get(slot);
   if (existing && existing.expiresAt > now) {
@@ -3225,13 +3244,9 @@ app.post('/api/coinslot/heartbeat', async (req, res) => {
     return res.status(400).json({ success: false, error: 'Invalid request.' });
   }
 
-  let clientIp = req.ip ? req.ip.replace('::ffff:', '') : '';
-  if (clientIp === '::1') clientIp = '127.0.0.1';
-  let mac = await getMacFromIp(clientIp);
-  if (!mac && clientIp === '127.0.0.1') mac = 'DEV-LOCALHOST';
+  const { mac, token } = await resolveRequestMac(req);
   if (!mac) return res.status(400).json({ success: false, error: 'Could not identify your device MAC.' });
 
-  const token = getSessionToken(req);
   const existing = coinSlotLocks.get(slot);
   if (!existing || existing.lockId !== lockId || (existing.ownerMac !== mac && (!token || existing.ownerToken !== token))) {
     return res.status(409).json({ success: false, code: 'COINSLOT_NOT_OWNED', error: 'Coinslot reservation expired.' });
@@ -3268,10 +3283,7 @@ app.post('/api/coinslot/release', async (req, res) => {
 
 app.post('/api/credits/add', async (req, res) => {
   try {
-    let clientIp = req.ip ? req.ip.replace('::ffff:', '') : '';
-    if (clientIp === '::1') clientIp = '127.0.0.1';
-    let mac = await getMacFromIp(clientIp);
-    if (!mac && clientIp === '127.0.0.1') mac = 'DEV-LOCALHOST';
+    const { clientIp, mac, token } = await resolveRequestMac(req);
     if (!mac) {
       return res.status(400).json({ success: false, error: 'Could not identify your device MAC.' });
     }
@@ -3314,7 +3326,6 @@ app.post('/api/credits/add', async (req, res) => {
       );
     }
 
-    const token = getSessionToken(req);
     if (safeMinutes > 0) {
       console.log(`[CREDIT] Added credit for ${mac} | Session ID=${token || 'NONE'} | ₱${safePesos}, ${safeMinutes}m`);
     } else {
@@ -3960,11 +3971,15 @@ app.post('/api/sessions/start', async (req, res) => {
     console.log(`[AUTH] New user connected: MAC=${mac} | Session ID=${tokenToUse}`);
     
     // Record local sale
+    let saleEventId = null;
     try {
-      await db.run(
+      const saleResult = await db.run(
         'INSERT INTO sales (mac, ip, amount, minutes, type, machine_id) VALUES (?, ?, ?, ?, ?, ?)',
         [mac, clientIp, pesos, minutes, 'coin', requestedSlot || 'main']
       );
+      if (saleResult?.lastID) {
+        saleEventId = `main-${systemHardwareId || 'machine'}-${saleResult.lastID}`;
+      }
     } catch (e) {
       console.error('[SALES] Failed to record local sale:', e);
     }
@@ -3973,8 +3988,10 @@ app.post('/api/sessions/start', async (req, res) => {
     if (!isNodeMCU) {
       syncSaleToCloud({
         amount: pesos,
+        event_id: saleEventId || undefined,
         session_duration: seconds,
         customer_mac: mac,
+        customer_ip: clientIp,
         transaction_type: 'coin_insert'
       }).catch(err => {
         console.error('[Sync] Failed to sync sale to cloud:', err);
@@ -5705,6 +5722,10 @@ async function applyUpdate(filePath, res) {
             await execPromise('npm install --include=dev --unsafe-perm --no-audit --no-fund --build-from-source', {
                 cwd: __dirname
             });
+            await execPromise(
+                `node -e "require.resolve('esbuild')" || npm install --include=dev --unsafe-perm --no-audit --no-fund --no-save esbuild`,
+                { cwd: __dirname }
+            );
         } catch (e) {
             console.error('[System Update] npm install failed:', e.message || e);
             return;
@@ -8483,12 +8504,19 @@ let wanTrafficHistory = {};
 
 async function updateWanTrafficStats() {
   try {
-    const wans = await db.all('SELECT * FROM wan_interfaces WHERE enabled = 1');
-    for (const wan of wans) {
+    const configuredWans = await db.all('SELECT * FROM wan_interfaces WHERE enabled = 1');
+    const defaultWan = await network.getDefaultRouteInterface().catch(() => null);
+    const names = new Set(configuredWans.map(wan => wan.name).filter(Boolean));
+    if (defaultWan) names.add(defaultWan);
+
+    for (const name of names) {
       try {
-        const stats = await network.getWanBytesStats(wan.name);
+        const [stats, link] = await Promise.all([
+          network.getWanBytesStats(name),
+          network.getWanStatus(name)
+        ]);
         const now = Date.now();
-        const key = wan.name;
+        const key = name;
         
         if (wanTrafficHistory[key]) {
           const prev = wanTrafficHistory[key];
@@ -8502,8 +8530,30 @@ async function updateWanTrafficStats() {
           stats.tx_rate = 0;
         }
         
-        wanTrafficHistory[key] = { ...stats, timestamp: now };
-      } catch (e) {}
+        wanTrafficHistory[key] = {
+          ...stats,
+          status: link.status,
+          ip: link.ip,
+          timestamp: now
+        };
+      } catch (e) {
+        wanTrafficHistory[name] = {
+          rx_bytes: 0,
+          tx_bytes: 0,
+          rx_rate: 0,
+          tx_rate: 0,
+          status: 'down',
+          ip: null,
+          timestamp: Date.now(),
+          error: e.message
+        };
+      }
+    }
+
+    for (const name of Object.keys(wanTrafficHistory)) {
+      if (!names.has(name)) {
+        delete wanTrafficHistory[name];
+      }
     }
   } catch (e) {}
 }
@@ -8697,9 +8747,10 @@ async function bootupRestore(isRestricted = false) {
   
   const coinCallback = (pesos) => {
     console.log(`[MAIN GPIO] Pulse Detected | Amount: ₱${pesos}`);
-    recordMainCoinPulse(pesos);
-    // Also emit multi-slot event for tracking
-    io.emit('multi-coin-pulse', { denomination: pesos, slot_id: null });
+    const accepted = recordMainCoinPulse(pesos);
+    if (accepted) {
+      io.emit('multi-coin-pulse', { denomination: pesos, slot_id: null });
+    }
   };
   
   try {
