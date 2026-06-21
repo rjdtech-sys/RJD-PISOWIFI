@@ -1455,7 +1455,7 @@ app.get('/api/license/status', async (req, res) => {
     const verification = await licenseManager.verifyLicense();
     const trialStatus = await checkTrialStatus(systemHardwareId, verification);
 
-    const isLicensed = verification.isValid && verification.isActivated;
+    const isLicensed = verification.isValid && verification.isActivated && !verification.isTrial;
     const isRevoked = verification.isRevoked || trialStatus.isRevoked;
     const canOperate = (isLicensed || trialStatus.isTrialActive) && !isRevoked;
 
@@ -2885,7 +2885,7 @@ app.get('/api/whoami', async (req, res) => {
     if (!systemHardwareId) systemHardwareId = await getUniqueHardwareId();
     const verification = await licenseManager.verifyLicense();
     const trialStatus = await checkTrialStatus(systemHardwareId, verification);
-    const isLicensed = verification.isValid && verification.isActivated;
+    const isLicensed = verification.isValid && verification.isActivated && !verification.isTrial;
     isRevoked = verification.isRevoked || trialStatus.isRevoked;
 
     canOperate = (isLicensed || trialStatus.isTrialActive) && !isRevoked;
@@ -3364,7 +3364,7 @@ app.post('/api/credits/use', async (req, res) => {
     if (!systemHardwareId) systemHardwareId = await getUniqueHardwareId();
     const verification = await licenseManager.verifyLicense();
     const trialStatus = await checkTrialStatus(systemHardwareId, verification);
-    const isLicensed = verification.isValid && verification.isActivated;
+    const isLicensed = verification.isValid && verification.isActivated && !verification.isTrial;
     const isRevoked = verification.isRevoked || trialStatus.isRevoked;
     const canOperate = (isLicensed || trialStatus.isTrialActive) && !isRevoked;
 
@@ -3799,7 +3799,7 @@ app.post('/api/sessions/start', async (req, res) => {
     if (!systemHardwareId) systemHardwareId = await getUniqueHardwareId();
     const verification = await licenseManager.verifyLicense();
     const trialStatus = await checkTrialStatus(systemHardwareId, verification);
-    const isLicensed = verification.isValid && verification.isActivated;
+    const isLicensed = verification.isValid && verification.isActivated && !verification.isTrial;
     const isRevoked = verification.isRevoked || trialStatus.isRevoked;
     const canOperate = (isLicensed || trialStatus.isTrialActive) && !isRevoked;
 
@@ -9473,7 +9473,7 @@ function startBackgroundTimers() {
     const verification = await licenseManager.verifyLicense();
     const trialStatus = await checkTrialStatus(systemHardwareId, verification);
     
-    const isLicensed = verification.isValid && verification.isActivated;
+    const isLicensed = verification.isValid && verification.isActivated && !verification.isTrial;
     const isRevoked = verification.isRevoked || trialStatus.isRevoked;
     const canOperate = (isLicensed || trialStatus.isTrialActive) && !isRevoked;
 
@@ -9515,7 +9515,7 @@ function startBackgroundTimers() {
   // We can fetch it inside bootupRestore or pass it
   const verificationStatus = await licenseManager.verifyLicense();
   const trialStatusInfo = await checkTrialStatus(systemHardwareId, verificationStatus);
-  const isLicensedNow = verificationStatus.isValid && verificationStatus.isActivated;
+  const isLicensedNow = verificationStatus.isValid && verificationStatus.isActivated && !verificationStatus.isTrial;
   const isRevokedNow = verificationStatus.isRevoked || trialStatusInfo.isRevoked;
   const canOperateNow = (isLicensedNow || trialStatusInfo.isTrialActive) && !isRevokedNow;
   await bootupRestore(!canOperateNow);
