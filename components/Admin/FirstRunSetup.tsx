@@ -116,7 +116,7 @@ const FirstRunSetup: React.FC<FirstRunSetupProps> = ({ hardwareId, onComplete })
 
                 {error && <p className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
 
-                <button type="submit" disabled={loading} className="mt-6 flex w-full items-center justify-center gap-2 rounded-md bg-indigo-600 px-4 py-3 text-sm font-bold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60">
+                <button type="submit" disabled={loading} className="first-run-primary-action mt-6 flex w-full items-center justify-center gap-2 rounded-md px-4 py-3 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-60">
                   {loading ? <Loader2 className="animate-spin" size={18} /> : <ShieldCheck size={18} />}
                   Check license
                 </button>
@@ -149,9 +149,9 @@ const FirstRunSetup: React.FC<FirstRunSetupProps> = ({ hardwareId, onComplete })
 
                 {error && <p className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
 
-                <button type="submit" disabled={loading} className="mt-6 flex w-full items-center justify-center gap-2 rounded-md bg-slate-950 px-4 py-3 text-sm font-bold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60">
+                <button type="submit" disabled={loading} className="first-run-primary-action mt-6 flex w-full items-center justify-center gap-2 rounded-md px-4 py-3 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-60">
                   {loading ? <Loader2 className="animate-spin" size={18} /> : <KeyRound size={18} />}
-                  Change new password
+                  Set admin password
                 </button>
               </form>
             )}

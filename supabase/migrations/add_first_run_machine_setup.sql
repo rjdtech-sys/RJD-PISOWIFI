@@ -22,6 +22,16 @@ where license_type is null;
 alter table public.licenses
   alter column license_type set default 'basic';
 
+-- Keep expired/replaced license history while allowing one current license per hardware.
+alter table public.licenses
+  drop constraint if exists licenses_hardware_id_key;
+
+create unique index if not exists licenses_one_current_hardware_key
+on public.licenses (hardware_id)
+where hardware_id is not null
+  and coalesce(is_active, false) = true
+  and coalesce(is_revoked, false) = false;
+
 do $$
 begin
   if not exists (
@@ -64,9 +74,28 @@ begin
 
   owner_id := account_id;
 
-  insert into public.user_roles (user_id, role)
-  values (owner_id, 'vendor')
-  on conflict (user_id, role) do nothing;
+  update public.licenses
+  set is_active = false
+  where hardware_id = trim(p_hardware_id)
+    and coalesce(is_active, false) = true
+    and coalesce(is_revoked, false) = false
+    and expires_at is not null
+    and expires_at <= now();
+
+  update public.vendors
+  set is_licensed = false,
+      trial_active = false
+  where hardware_id = trim(p_hardware_id)
+    and coalesce(is_revoked, false) = false
+    and trial_expires_at is not null
+    and trial_expires_at <= now();
+
+  if not exists (
+    select 1 from public.user_roles where user_id = owner_id
+  ) then
+    insert into public.user_roles (user_id, role)
+    values (owner_id, 'client');
+  end if;
 
   select * into machine_record
   from public.vendors
@@ -82,12 +111,55 @@ begin
   select * into selected_license
   from public.licenses
   where hardware_id = trim(p_hardware_id)
-  order by created_at desc
+    and coalesce(is_active, false) = true
+    and coalesce(is_revoked, false) = false
+  order by
+    case when coalesce(license_type, 'basic') = 'trial' then 2 else 1 end,
+    created_at desc
   limit 1
   for update;
 
   if selected_license.id is not null and selected_license.vendor_id <> owner_id then
     raise exception 'This hardware license belongs to another RJD account';
+  end if;
+
+  -- A paid inventory license automatically replaces the current trial.
+  if selected_license.id is not null
+     and selected_license.license_type = 'trial' then
+    declare
+      paid_license public.licenses%rowtype;
+    begin
+      select * into paid_license
+      from public.licenses
+      where vendor_id = owner_id
+        and hardware_id is null
+        and coalesce(is_active, false) = false
+        and coalesce(is_revoked, false) = false
+        and coalesce(license_type, 'basic') <> 'trial'
+        and (expires_at is null or expires_at > now())
+      order by
+        case coalesce(license_type, 'basic')
+          when 'lifetime' then 1
+          when 'premium' then 2
+          else 3
+        end,
+        created_at
+      limit 1
+      for update skip locked;
+
+      if paid_license.id is not null then
+        update public.licenses
+        set is_active = false
+        where id = selected_license.id;
+
+        update public.licenses
+        set hardware_id = trim(p_hardware_id),
+            is_active = true,
+            activated_at = coalesce(activated_at, now())
+        where id = paid_license.id
+        returning * into selected_license;
+      end if;
+    end;
   end if;
 
   if selected_license.id is null then
@@ -168,7 +240,8 @@ begin
       status = 'online',
       trial_started_at = excluded.trial_started_at,
       trial_expires_at = excluded.trial_expires_at,
-      trial_active = excluded.trial_active
+      trial_active = excluded.trial_active,
+      is_revoked = false
   returning * into machine_record;
 
   label := case coalesce(selected_license.license_type, 'basic')
@@ -204,14 +277,28 @@ begin
     raise exception 'Website account authentication is required';
   end if;
 
-  insert into public.user_roles (user_id, role)
-  values (account_id, 'vendor')
-  on conflict (user_id, role) do nothing;
+  if not exists (
+    select 1 from public.user_roles where user_id = account_id
+  ) then
+    insert into public.user_roles (user_id, role)
+    values (account_id, 'client');
+  end if;
 
   return jsonb_build_object(
     'success', true,
     'account_id', account_id,
-    'role', 'vendor'
+    'role', (
+      select role
+      from public.user_roles
+      where user_id = account_id
+      order by case role
+        when 'superadmin' then 1
+        when 'vendor' then 2
+        when 'vendor_subaccount' then 3
+        else 4
+      end
+      limit 1
+    )
   );
 end;
 $$;
