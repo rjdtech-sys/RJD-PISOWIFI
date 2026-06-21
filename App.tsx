@@ -9,6 +9,7 @@ import SystemUpdater from './components/Admin/SystemUpdater';
 import SystemSettings from './components/Admin/SystemSettings';
 import DeviceManager from './components/Admin/DeviceManager';
 import Login from './components/Admin/Login';
+import FirstRunSetup from './components/Admin/FirstRunSetup';
 import ThemeSettings from './components/Admin/ThemeSettings';
 import PortalEditor from './components/Admin/PortalEditor';
 import PPPoEServer from './components/Admin/PPPoEServer';
@@ -50,11 +51,27 @@ const App: React.FC = () => {
   const isCurrentlyAdminPath = () => {
     const path = window.location.pathname.toLowerCase();
     const hasAdminFlag = localStorage.getItem('rjd_admin_mode') === 'true';
-    return path === '/admin' || path === '/admin/' || path.startsWith('/admin/') || hasAdminFlag;
+    return path === '/admin'
+      || path === '/admin/'
+      || path.startsWith('/admin/')
+      || path === '/portal/admin'
+      || path === '/portal/admin/'
+      || path.startsWith('/portal/admin/')
+      || hasAdminFlag;
   };
+
+  const getAdminBasePath = () => window.location.pathname.toLowerCase().startsWith('/portal/admin')
+    ? '/portal/admin'
+    : '/admin';
 
   const [isAdmin, setIsAdmin] = useState(isCurrentlyAdminPath());
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [setupState, setSetupState] = useState<{ loading: boolean; required: boolean; completed: boolean; hardwareId: string }>({
+    loading: true,
+    required: false,
+    completed: true,
+    hardwareId: ''
+  });
   // Initialize activeTab from localStorage if available to persist state across refreshes
   const [activeTab, setActiveTab] = useState<AdminTab>(() => {
     const savedTab = localStorage.getItem('rjd_admin_last_tab');
@@ -171,6 +188,30 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
+    const checkSetup = async () => {
+      try {
+        const response = await fetch('/api/setup/status');
+        const data = await response.json();
+        const next = {
+          loading: false,
+          required: Boolean(data.required),
+          completed: Boolean(data.completed),
+          hardwareId: data.hardwareId || ''
+        };
+        setSetupState(next);
+        const adminBase = getAdminBasePath();
+        const setupPath = `${adminBase}/setup`;
+        if (isCurrentlyAdminPath() && next.required && !next.completed && window.location.pathname !== setupPath) {
+          window.history.replaceState({}, '', setupPath);
+        } else if (next.completed && window.location.pathname === setupPath) {
+          window.history.replaceState({}, '', adminBase);
+        }
+      } catch {
+        setSetupState(current => ({ ...current, loading: false }));
+      }
+    };
+    checkSetup();
+
     // Initialize theme based on current mode
     if (isCurrentlyAdminPath()) {
       initAdminTheme();
@@ -416,7 +457,19 @@ const App: React.FC = () => {
         </button>
       </div>
 
-      {isAdmin ? (
+      {isAdmin && setupState.loading ? (
+        <div className="flex min-h-screen items-center justify-center bg-slate-100 text-sm font-semibold text-slate-500">Checking machine setup...</div>
+      ) : isAdmin && setupState.required && !setupState.completed ? (
+        <FirstRunSetup
+          hardwareId={setupState.hardwareId}
+          onComplete={() => {
+            setSetupState(current => ({ ...current, completed: true }));
+            clearAdminToken();
+            setIsAuthenticated(false);
+            window.history.replaceState({}, '', getAdminBasePath());
+          }}
+        />
+      ) : isAdmin ? (
         isAuthenticated ? (
           <div className="admin-layout flex h-screen overflow-hidden bg-slate-100 font-sans selection:bg-blue-100">
             {/* Mobile Sidebar Overlay */}

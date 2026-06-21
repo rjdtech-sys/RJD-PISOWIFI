@@ -22,19 +22,13 @@ export function getHardwareSerial(): string | null {
         return serialMatch[1].trim();
       }
       
-      // Look for Hardware field combined with Revision (Orange Pi fallback)
-      const hardwareMatch = cpuInfo.match(/^Hardware\s*:\s*(.+)$/m);
-      const revisionMatch = cpuInfo.match(/^Revision\s*:\s*([0-9a-fA-F]+)$/m);
-      
-      if (hardwareMatch && revisionMatch) {
-        return `${hardwareMatch[1].trim()}-${revisionMatch[1].trim()}`;
-      }
     }
     
     // ======= Source 2: Device tree serial number (ARM boards) =======
     const dtPaths = [
       '/sys/firmware/devicetree/base/serial-number',
-      '/proc/device-tree/serial-number'
+      '/proc/device-tree/serial-number',
+      '/sys/devices/soc0/serial_number'
     ];
     for (const dtPath of dtPaths) {
       if (fs.existsSync(dtPath)) {

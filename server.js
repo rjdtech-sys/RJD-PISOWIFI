@@ -24,6 +24,7 @@ const { generatePPPoEUserFormPdf } = require('./lib/pppoe-user-form');
 const { generatePPPoESaleReceiptPdf } = require('./lib/pppoe-sale-receipt');
 const mikrotikReadonly = require('./lib/mikrotik-readonly');
 const serviceManager = require('./lib/service-manager');
+const { createClient } = require('@supabase/supabase-js');
 
 const PPPoE_BILLING_DIR = path.resolve(__dirname, 'data', 'billing', 'pppoe');
 const PPPoE_FORMS_DIR = path.resolve(__dirname, 'data', 'forms', 'pppoe');
@@ -512,8 +513,234 @@ app.use((req, res, next) => {
   next();
 });
 
+const FIRST_RUN_MARKER = path.resolve(__dirname, '.first-run-setup');
+const setupSessions = new Map();
+
+async function getSetupState() {
+  const completedRow = await db.get('SELECT value FROM config WHERE key = ?', ['setup_completed']).catch(() => null);
+  const required = fs.existsSync(FIRST_RUN_MARKER);
+  return {
+    required,
+    completed: !required || completedRow?.value === '1'
+  };
+}
+
+function getAdminRoute(pathname) {
+  const normalized = String(pathname || '').toLowerCase().replace(/\/+$/, '') || '/';
+  if (normalized === '/portal/admin' || normalized.startsWith('/portal/admin/')) {
+    return {
+      base: '/portal/admin',
+      setup: '/portal/admin/setup',
+      isSetup: normalized === '/portal/admin/setup'
+    };
+  }
+  if (normalized === '/admin' || normalized.startsWith('/admin/')) {
+    return {
+      base: '/admin',
+      setup: '/admin/setup',
+      isSetup: normalized === '/admin/setup'
+    };
+  }
+  return null;
+}
+
+app.use(async (req, res, next) => {
+  if (req.method !== 'GET') return next();
+  const adminRoute = getAdminRoute(req.path);
+  if (!adminRoute) return next();
+
+  try {
+    const setupState = await getSetupState();
+    if (!setupState.completed && !adminRoute.isSetup) {
+      return res.redirect(302, adminRoute.setup);
+    }
+    if (setupState.completed && adminRoute.isSetup) {
+      return res.redirect(302, adminRoute.base);
+    }
+    next();
+  } catch (error) {
+    console.error('[Setup] Admin route check failed:', error);
+    next();
+  }
+});
+
+function getLicenseLabel(type) {
+  if (type === 'trial') return '7-Day Trial';
+  if (type === 'premium') return 'Premium License';
+  if (type === 'lifetime') return 'Lifetime License';
+  return 'Basic License';
+}
+
+app.get('/api/setup/status', async (req, res) => {
+  try {
+    const state = await getSetupState();
+    if (!systemHardwareId) systemHardwareId = await getUniqueHardwareId();
+    const accountEmail = await db.get('SELECT value FROM config WHERE key = ?', ['cloud_account_email']).catch(() => null);
+    const localLicense = await db.get('SELECT * FROM license_info WHERE hardware_id = ?', [systemHardwareId]).catch(() => null);
+    const typeRow = await db.get('SELECT value FROM config WHERE key = ?', ['cloud_license_type']).catch(() => null);
+    const licenseType = typeRow?.value || (localLicense?.trial_expires_at ? 'trial' : null);
+
+    res.json({
+      ...state,
+      hardwareId: systemHardwareId,
+      email: accountEmail?.value || null,
+      license: localLicense?.license_key ? {
+        active: Boolean(localLicense.is_active),
+        type: licenseType || 'basic',
+        label: getLicenseLabel(licenseType),
+        expiresAt: localLicense.expires_at || localLicense.trial_expires_at || null
+      } : null
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/setup/license', async (req, res) => {
+  try {
+    const state = await getSetupState();
+    if (!state.required || state.completed) {
+      return res.status(409).json({ error: 'First-run setup is already complete' });
+    }
+
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const password = String(req.body?.password || '');
+    if (!email || !password) {
+      return res.status(400).json({ error: 'RJD website email and password are required' });
+    }
+
+    const supabaseUrl = process.env.SUPABASE_URL || '';
+    const supabaseKey = process.env.SUPABASE_ANON_KEY || '';
+    if (!supabaseUrl || !supabaseKey) {
+      return res.status(503).json({ error: 'Cloud account service is not configured' });
+    }
+
+    if (!systemHardwareId) systemHardwareId = await getUniqueHardwareId();
+    const cloud = createClient(supabaseUrl, supabaseKey, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+    });
+    const { data: authData, error: authError } = await cloud.auth.signInWithPassword({ email, password });
+    if (authError || !authData?.user) {
+      return res.status(401).json({ error: authError?.message || 'Invalid RJD website credentials' });
+    }
+
+    const machineName = `RJD PisoWiFi (${systemHardwareId.slice(0, 12)})`;
+    const { data: activation, error: activationError } = await cloud.rpc('setup_pisowifi_machine', {
+      p_hardware_id: systemHardwareId,
+      p_machine_name: machineName
+    });
+    await cloud.auth.signOut().catch(() => {});
+    if (activationError) {
+      console.error('[Setup] Cloud license assignment failed:', activationError);
+      return res.status(400).json({ error: activationError.message });
+    }
+
+    const result = Array.isArray(activation) ? activation[0] : activation;
+    if (!result?.license_key) {
+      return res.status(502).json({ error: 'Cloud did not return an assigned license' });
+    }
+
+    const activatedAt = new Date().toISOString();
+    const isTrial = result.license_type === 'trial';
+    await db.run(
+      `INSERT INTO license_info (
+        hardware_id, license_key, is_active, is_revoked, activated_at, expires_at,
+        trial_started_at, trial_expires_at
+      ) VALUES (?, ?, 1, 0, ?, ?, ?, ?)
+      ON CONFLICT(hardware_id) DO UPDATE SET
+        license_key = excluded.license_key,
+        is_active = 1,
+        is_revoked = 0,
+        activated_at = excluded.activated_at,
+        expires_at = excluded.expires_at,
+        trial_started_at = excluded.trial_started_at,
+        trial_expires_at = excluded.trial_expires_at`,
+      [
+        systemHardwareId,
+        result.license_key,
+        activatedAt,
+        result.expires_at || null,
+        isTrial ? activatedAt : null,
+        isTrial ? result.expires_at : null
+      ]
+    );
+
+    const configValues = {
+      cloud_account_id: result.account_id || authData.user.id,
+      cloud_account_email: authData.user.email || email,
+      cloud_machine_id: result.machine_id || '',
+      cloud_vendor_id: result.account_id || authData.user.id,
+      cloud_license_type: result.license_type || 'basic'
+    };
+    for (const [key, value] of Object.entries(configValues)) {
+      await db.run('INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)', [key, String(value)]);
+    }
+    if (edgeSync) {
+      edgeSync.hardwareId = systemHardwareId;
+      edgeSync.machineId = result.machine_id || edgeSync.machineId;
+      edgeSync.vendorId = result.account_id || authData.user.id;
+    }
+
+    const setupToken = crypto.randomBytes(32).toString('hex');
+    setupSessions.set(setupToken, {
+      expiresAt: Date.now() + 15 * 60 * 1000,
+      email: authData.user.email || email
+    });
+
+    res.json({
+      success: true,
+      setupToken,
+      email: authData.user.email || email,
+      hardwareId: systemHardwareId,
+      machineId: result.machine_id || null,
+      license: {
+        active: true,
+        type: result.license_type || 'basic',
+        label: result.label || getLicenseLabel(result.license_type),
+        expiresAt: result.expires_at || null
+      }
+    });
+  } catch (error) {
+    console.error('[Setup] License step failed:', error);
+    res.status(500).json({ error: error.message || 'Setup failed' });
+  }
+});
+
+app.post('/api/setup/complete', async (req, res) => {
+  try {
+    const setupToken = String(req.body?.setupToken || '');
+    const newPassword = String(req.body?.newPassword || '');
+    const setupSession = setupSessions.get(setupToken);
+    if (!setupSession || setupSession.expiresAt <= Date.now()) {
+      setupSessions.delete(setupToken);
+      return res.status(401).json({ error: 'Setup session expired. Verify your RJD account again.' });
+    }
+    if (newPassword.length < 8) {
+      return res.status(400).json({ error: 'Admin password must be at least 8 characters' });
+    }
+
+    const { salt, hash } = hashPassword(newPassword);
+    await db.run('UPDATE admin SET password_hash = ?, salt = ? WHERE username = ?', [hash, salt, 'admin']);
+    await db.run('DELETE FROM admin_sessions');
+    await db.run('INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)', ['setup_completed', '1']);
+    setupSessions.delete(setupToken);
+    try { fs.unlinkSync(FIRST_RUN_MARKER); } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+
+    res.json({ success: true, username: 'admin' });
+  } catch (error) {
+    console.error('[Setup] Completion failed:', error);
+    res.status(500).json({ error: error.message || 'Could not finish setup' });
+  }
+});
+
 // ADMIN AUTHENTICATION
 const requireAdmin = async (req, res, next) => {
+  const setupState = await getSetupState();
+  if (!setupState.completed) {
+    return res.status(428).json({ error: 'First-run setup required', setupRequired: true });
+  }
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Unauthorized' });
@@ -547,6 +774,10 @@ const requireAdmin = async (req, res, next) => {
 
 // SUPERADMIN AUTHENTICATION (for license generation and other admin functions)
 const requireSuperadmin = async (req, res, next) => {
+  const setupState = await getSetupState();
+  if (!setupState.completed) {
+    return res.status(428).json({ error: 'First-run setup required', setupRequired: true });
+  }
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Unauthorized' });
@@ -589,6 +820,10 @@ const requireSuperadmin = async (req, res, next) => {
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
   try {
+    const setupState = await getSetupState();
+    if (!setupState.completed) {
+      return res.status(428).json({ error: 'Complete first-run setup before signing in', setupRequired: true });
+    }
     const admin = await db.get('SELECT * FROM admin WHERE username = ?', [username]);
     if (!admin) {
       return res.status(401).json({ error: 'Invalid credentials' });
@@ -1204,6 +1439,19 @@ app.get('/api/license/status', async (req, res) => {
       systemHardwareId = await getUniqueHardwareId();
     }
 
+    const setupState = await getSetupState();
+    if (!setupState.completed) {
+      return res.json({
+        hardwareId: systemHardwareId,
+        isLicensed: false,
+        isRevoked: false,
+        hasHadLicense: false,
+        canOperate: false,
+        setupRequired: true,
+        trial: { isActive: false, hasEnded: false, daysRemaining: 0, expiresAt: null }
+      });
+    }
+
     const verification = await licenseManager.verifyLicense();
     const trialStatus = await checkTrialStatus(systemHardwareId, verification);
 
@@ -1231,7 +1479,7 @@ app.get('/api/license/status', async (req, res) => {
   }
 });
 
-app.post('/api/license/activate', async (req, res) => {
+app.post('/api/license/activate', requireAdmin, async (req, res) => {
   const { licenseKey } = req.body;
   
   if (!licenseKey || licenseKey.trim().length === 0) {
@@ -9257,7 +9505,7 @@ function startBackgroundTimers() {
       console.log(`[EdgeSync] Queued syncs: ${syncStats.queuedSyncs} (will retry)`);
     }
   } else {
-    console.warn('[EdgeSync] Cloud sync disabled - MACHINE_ID or VENDOR_ID not set in .env');
+    console.warn('[EdgeSync] Cloud sync pending - machine identity has not been registered yet');
   }
 
   // Voucher APIs and Timers moved to top level
