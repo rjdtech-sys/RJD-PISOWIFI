@@ -8,7 +8,7 @@ const os = require('os');
 const fileUpload = require('express-fileupload');
 const si = require('systeminformation');
 const db = require('./lib/db');
-const { initGPIO, updateGPIO, registerSlotCallback, unregisterSlotCallback, setRelayState } = require('./lib/gpio');
+const { initGPIO, updateGPIO, registerSlotCallback, unregisterSlotCallback, setRelayState, simulateCoinPulse } = require('./lib/gpio');
 const NodeMCUListener = require('./lib/nodemcu-listener');
 const { getNodeMCULicenseManager } = require('./lib/nodemcu-license');
 const network = require('./lib/network');
@@ -4434,6 +4434,32 @@ app.post('/api/config', requireAdmin, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+app.post('/api/hardware/test-relay', requireAdmin, async (req, res) => {
+  try {
+    const durationMs = Math.max(250, Math.min(10000, parseInt(req.body?.durationMs, 10) || 1500));
+    setRelayState(true);
+    setTimeout(() => {
+      try { setRelayState(false); } catch (e) {}
+    }, durationMs).unref?.();
+    res.json({ success: true, durationMs });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/hardware/test-pulse', requireAdmin, async (req, res) => {
+  try {
+    const pulses = Math.max(1, Math.min(100, parseInt(req.body?.pulses, 10) || 1));
+    const success = simulateCoinPulse(pulses);
+    if (!success) {
+      return res.status(400).json({ success: false, error: 'GPIO pulse callback is not initialized yet.' });
+    }
+    res.json({ success: true, pulses });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/config/central-portal', requireAdmin, async (req, res) => {
   try {
     const enabledRow = await db.get('SELECT value FROM config WHERE key = ?', ['centralPortalIpEnabled']);
@@ -7578,6 +7604,45 @@ async function monitorMultiWanHealth() {
 // Run Multi-WAN health check every 30 seconds
 setInterval(monitorMultiWanHealth, 30000);
 
+async function getProtectedLanInterfaces() {
+    const protectedInterfaces = new Set(['lo']);
+
+    try {
+      const hotspots = await db.all('SELECT interface FROM hotspots WHERE enabled = 1').catch(() => []);
+      for (const h of hotspots) {
+        const iface = String(h.interface || '').trim();
+        if (iface) protectedInterfaces.add(iface);
+      }
+    } catch (e) {}
+
+    try {
+      const bridges = await db.all('SELECT name, members FROM bridges').catch(() => []);
+      for (const bridge of bridges) {
+        const name = String(bridge.name || '').trim();
+        if (name) protectedInterfaces.add(name);
+
+        try {
+          const members = JSON.parse(bridge.members || '[]');
+          if (Array.isArray(members)) {
+            for (const member of members) {
+              const iface = String(member || '').trim();
+              if (iface) protectedInterfaces.add(iface);
+            }
+          }
+        } catch (e) {}
+      }
+    } catch (e) {}
+
+    return protectedInterfaces;
+}
+
+async function isProtectedLanInterface(name) {
+    const iface = String(name || '').trim();
+    if (!iface) return false;
+    const protectedInterfaces = await getProtectedLanInterfaces();
+    return protectedInterfaces.has(iface);
+}
+
 async function applyMultiWanConfig(config) {
     try {
         console.log('[MultiWAN] Applying configuration...', config.mode, 'topology:', config.topology);
@@ -7646,6 +7711,11 @@ async function applyMultiWanConfig(config) {
           try {
             const activeWan = await db.get('SELECT * FROM wan_interfaces WHERE enabled = 1 LIMIT 1');
             if (activeWan) {
+              if (await isProtectedLanInterface(activeWan.name)) {
+                console.warn(`[MultiWAN] Refusing to use LAN/hotspot interface ${activeWan.name} as single WAN.`);
+                return;
+              }
+
               const gw = activeWan.gateway || await network.getWanGateway(activeWan.name);
               if (gw) {
                 // Remove any lingering ECMP/PCC routes first
@@ -7772,6 +7842,9 @@ app.post('/api/multiwan/wans', requireAdmin, async (req, res) => {
     if (!type || !['dhcp', 'static', 'pppoe'].includes(type)) {
       return res.status(400).json({ error: 'Valid type required (dhcp, static, pppoe)' });
     }
+    if (await isProtectedLanInterface(name)) {
+      return res.status(400).json({ error: `${name} is configured as LAN/hotspot and cannot be used as WAN.` });
+    }
 
     const result = await db.run(
       'INSERT INTO wan_interfaces (name, type, config, gateway, weight, enabled, is_vlan, vlan_parent, vlan_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -7803,6 +7876,10 @@ app.post('/api/multiwan/wans', requireAdmin, async (req, res) => {
         const otherWans = await db.all('SELECT * FROM wan_interfaces WHERE id != ? AND enabled = 1', [newWan.id]);
         for (const ow of otherWans) {
           await db.run('UPDATE wan_interfaces SET enabled = 0 WHERE id = ?', [ow.id]);
+          if (await isProtectedLanInterface(ow.name)) {
+            console.warn(`[MultiWAN] Preserving LAN/hotspot interface ${ow.name} while disabling stale WAN row.`);
+            continue;
+          }
           await network.removeWanConfig(ow.name);
         }
         // Ensure default route goes through the new WAN
@@ -7810,6 +7887,7 @@ app.post('/api/multiwan/wans', requireAdmin, async (req, res) => {
         if (resolvedGw) {
           await execPromise(`ip route del default 2>/dev/null || true`).catch(() => {});
           await execPromise(`ip route add default via ${resolvedGw} dev ${name}`).catch(() => {});
+          await network.initFirewall().catch(e => console.error(`[MultiWAN] Firewall refresh failed: ${e.message}`));
         }
       } else if (topology === 'multi') {
         // Auto-enable load balancing with ECMP if 2+ WANs are now enabled
@@ -7837,6 +7915,10 @@ app.put('/api/multiwan/wans/:id', requireAdmin, async (req, res) => {
     if (!id || Number.isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
 
     const { name, type, config, gateway, weight, enabled } = req.body;
+    if (await isProtectedLanInterface(name)) {
+      return res.status(400).json({ error: `${name} is configured as LAN/hotspot and cannot be used as WAN.` });
+    }
+
     await db.run(
       'UPDATE wan_interfaces SET name = ?, type = ?, config = ?, gateway = ?, weight = ?, enabled = ?, updated_at = datetime("now") WHERE id = ?',
       [name, type, JSON.stringify(config || {}), gateway || null, weight || 1, enabled ? 1 : 0, id]
@@ -7856,6 +7938,7 @@ app.put('/api/multiwan/wans/:id', requireAdmin, async (req, res) => {
           [resolvedGw, applyResult.ip || null, applyResult.status || 'down', id]
         );
       }
+      await network.initFirewall().catch(e => console.error(`[MultiWAN] Firewall refresh failed: ${e.message}`));
     } else {
       await network.removeWanConfig(updated.name);
     }
@@ -7873,7 +7956,11 @@ app.delete('/api/multiwan/wans/:id', requireAdmin, async (req, res) => {
 
     const wan = await db.get('SELECT * FROM wan_interfaces WHERE id = ?', [id]);
     if (wan) {
-      await network.removeWanConfig(wan.name);
+      if (await isProtectedLanInterface(wan.name)) {
+        console.warn(`[MultiWAN] Deleting stale WAN row for LAN/hotspot interface ${wan.name} without flushing interface config.`);
+      } else {
+        await network.removeWanConfig(wan.name);
+      }
     }
     await db.run('DELETE FROM wan_interfaces WHERE id = ?', [id]);
     res.json({ success: true });
@@ -7887,6 +7974,9 @@ app.post('/api/multiwan/wans/:id/apply', requireAdmin, async (req, res) => {
 
     const wan = await db.get('SELECT * FROM wan_interfaces WHERE id = ?', [id]);
     if (!wan) return res.status(404).json({ error: 'WAN interface not found' });
+    if (await isProtectedLanInterface(wan.name)) {
+      return res.status(400).json({ error: `${wan.name} is configured as LAN/hotspot and cannot be used as WAN.` });
+    }
 
     wan.config = JSON.parse(wan.config || '{}');
 
@@ -7904,6 +7994,10 @@ app.post('/api/multiwan/wans/:id/apply', requireAdmin, async (req, res) => {
       const otherWans = await db.all('SELECT * FROM wan_interfaces WHERE id != ? AND enabled = 1', [id]);
       for (const ow of otherWans) {
         await db.run('UPDATE wan_interfaces SET enabled = 0 WHERE id = ?', [ow.id]);
+        if (await isProtectedLanInterface(ow.name)) {
+          console.warn(`[MultiWAN] Preserving LAN/hotspot interface ${ow.name} while disabling stale WAN row.`);
+          continue;
+        }
         await network.removeWanConfig(ow.name);
       }
       // Set default route through this WAN
@@ -7911,6 +8005,7 @@ app.post('/api/multiwan/wans/:id/apply', requireAdmin, async (req, res) => {
       if (resolvedGw) {
         await execPromise(`ip route del default 2>/dev/null || true`).catch(() => {});
         await execPromise(`ip route add default via ${resolvedGw} dev ${wan.name}`).catch(() => {});
+        await network.initFirewall().catch(e => console.error(`[MultiWAN] Firewall refresh failed: ${e.message}`));
       }
     } else if (topology === 'multi') {
       // Re-apply ECMP/PCC load balancing

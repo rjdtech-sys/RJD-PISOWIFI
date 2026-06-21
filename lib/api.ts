@@ -99,6 +99,24 @@ export const apiClient = {
     await handleResponse(res);
   },
 
+  async testHardwareRelay(durationMs = 1500): Promise<void> {
+    const res = await fetch(`${API_BASE}/hardware/test-relay`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ durationMs })
+    });
+    await handleResponse(res);
+  },
+
+  async testHardwarePulse(pulses = 1): Promise<void> {
+    const res = await fetch(`${API_BASE}/hardware/test-pulse`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ pulses })
+    });
+    await handleResponse(res);
+  },
+
   async getCentralPortalConfig(): Promise<{ enabled: boolean; ip: string }> {
     const res = await fetch(`${API_BASE}/config/central-portal`, { headers: getHeaders() });
     return handleResponse(res);

@@ -7,7 +7,9 @@ import {
   Monitor,
   Wifi,
   CheckCircle,
-  Edit2
+  Edit2,
+  Zap,
+  Coins
 } from 'lucide-react';
 import opiPinout from '../../lib/opi_pinout';
 import rpiPinout from '../../lib/rpi_pinout';
@@ -37,6 +39,8 @@ const HardwareManager: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [testingRelay, setTestingRelay] = useState(false);
+  const [testingPulse, setTestingPulse] = useState(false);
 
   const [lastCoinsOutStats, setLastCoinsOutStats] = useState<{lastCoinsOutGross: number, lastCoinsOutNet: number, lastCoinsOutDate: string} | null>(null);
   const [showCoinsOutModal, setShowCoinsOutModal] = useState(false);
@@ -310,6 +314,28 @@ const HardwareManager: React.FC = () => {
     }
   };
 
+  const handleTestRelay = async () => {
+    setTestingRelay(true);
+    try {
+      await apiClient.testHardwareRelay(1500);
+    } catch (e: any) {
+      alert(e?.message || 'Relay test failed.');
+    } finally {
+      setTimeout(() => setTestingRelay(false), 1500);
+    }
+  };
+
+  const handleTestPulse = async () => {
+    setTestingPulse(true);
+    try {
+      await apiClient.testHardwarePulse(1);
+    } catch (e: any) {
+      alert(e?.message || 'Coin pulse test failed.');
+    } finally {
+      setTestingPulse(false);
+    }
+  };
+
   if (loading) return (
     <div className="p-12 text-center text-slate-400 text-xs font-black uppercase tracking-widest animate-pulse">
       Probing Hardware Bus...
@@ -423,6 +449,24 @@ const HardwareManager: React.FC = () => {
                      >
                        <Save size={12} />
                        {saving ? 'Saving...' : 'Apply Config'}
+                     </button>
+                   </div>
+                   <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                     <button
+                       onClick={handleTestRelay}
+                       disabled={testingRelay || relayPin === null}
+                       className="px-3 py-2 rounded-lg border border-orange-200 bg-orange-50 text-orange-700 font-black text-[10px] uppercase tracking-widest disabled:opacity-50 flex items-center justify-center gap-2"
+                     >
+                       <Zap size={12} />
+                       {testingRelay ? 'Testing Relay...' : 'Test Relay'}
+                     </button>
+                     <button
+                       onClick={handleTestPulse}
+                       disabled={testingPulse}
+                       className="px-3 py-2 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 font-black text-[10px] uppercase tracking-widest disabled:opacity-50 flex items-center justify-center gap-2"
+                     >
+                       <Coins size={12} />
+                       {testingPulse ? 'Sending Pulse...' : 'Test Coin Pulse'}
                      </button>
                    </div>
                  </div>
