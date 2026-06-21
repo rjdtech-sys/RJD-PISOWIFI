@@ -5448,16 +5448,18 @@ async function applyUpdate(filePath, res) {
     // Cleanup uploaded update package
     fs.unlinkSync(filePath);
     
-    // Run dependency install and build, then reboot entire system
-    res.json({ success: true, message: 'System update applied. Running npm install, build, and rebooting...' });
+    // Install build dependencies and rebuild before restarting only this PM2 app.
+    // A full board reboot can leave USB LAN adapters unavailable and break br0.
+    res.json({ success: true, message: 'System update applied. Installing dependencies, building, and restarting the application...' });
     
     setTimeout(async () => {
         try {
-            await execPromise('npm install --unsafe-perm --no-audit --no-fund --build-from-source', {
+            await execPromise('npm install --include=dev --unsafe-perm --no-audit --no-fund --build-from-source', {
                 cwd: __dirname
             });
         } catch (e) {
             console.error('[System Update] npm install failed:', e.message || e);
+            return;
         }
 
         try {
@@ -5466,20 +5468,15 @@ async function applyUpdate(filePath, res) {
             });
         } catch (e) {
             console.error('[System Update] npm run build failed:', e.message || e);
+            return;
         }
 
         try {
             await execPromise('sync').catch(() => {});
         } catch (_) {}
 
-        try {
-            exec('sudo reboot').unref();
-        } catch (e) {
-            console.error('[System Update] Reboot command failed:', e.message || e);
-            try {
-                process.exit(0);
-            } catch (_) {}
-        }
+        console.log('[System Update] Build complete. Restarting application through PM2...');
+        process.exit(0);
     }, 2000);
   } catch (err) {
     console.error('Update failed:', err);
