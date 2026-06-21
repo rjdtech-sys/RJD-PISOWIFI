@@ -249,7 +249,7 @@ export const apiClient = {
     return handleResponse(res);
   },
 
-  async reserveCoinSlot(slot: string): Promise<{ success: boolean; slot?: string; lockId?: string; expiresAt?: number; code?: string; busyUntil?: number; error?: string; status: number }> {
+  async reserveCoinSlot(slot: string): Promise<{ success: boolean; slot?: string; lockId?: string; expiresAt?: number; totalPesos?: number; code?: string; busyUntil?: number; error?: string; status: number }> {
     const res = await fetch(`${API_BASE}/coinslot/reserve`, {
       method: 'POST',
       headers: getHeaders(),
@@ -259,8 +259,8 @@ export const apiClient = {
     return { status: res.status, ...(data || {}) };
   },
 
-  async addCredit(pesos: number, minutes?: number): Promise<{ success: boolean; status?: number }> {
-    const payload: any = { pesos };
+  async addCredit(pesos: number, minutes?: number, slot?: string, lockId?: string): Promise<{ success: boolean; status?: number }> {
+    const payload: any = { pesos, slot, lockId };
     if (typeof minutes === 'number') {
       payload.minutes = minutes;
     }
@@ -287,7 +287,7 @@ export const apiClient = {
     };
   },
 
-  async heartbeatCoinSlot(slot: string, lockId: string): Promise<{ success: boolean; expiresAt?: number; error?: string; status: number }> {
+  async heartbeatCoinSlot(slot: string, lockId: string): Promise<{ success: boolean; expiresAt?: number; totalPesos?: number; error?: string; status: number }> {
     const res = await fetch(`${API_BASE}/coinslot/heartbeat`, {
       method: 'POST',
       headers: getHeaders(),

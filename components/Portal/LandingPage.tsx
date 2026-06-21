@@ -1047,10 +1047,7 @@ const LandingPage: React.FC<Props> = ({ rates, sessions, onSessionStart, refresh
         <CoinModal 
           onClose={handleCloseModal}
           onCancelWithCredit={(pesos, minutes) => {
-            apiClient.addCredit(pesos, minutes).catch(() => {});
-            if (reservedSlot && coinSlotLockId) {
-              apiClient.releaseCoinSlot(reservedSlot, coinSlotLockId).catch(() => {});
-            }
+            apiClient.addCredit(pesos, minutes, reservedSlot || selectedSlot, coinSlotLockId || undefined).catch(() => {});
             setCreditPesos(prev => prev + pesos);
             setShowModal(false);
             setReservedSlot(null);
@@ -1073,11 +1070,8 @@ const LandingPage: React.FC<Props> = ({ rates, sessions, onSessionStart, refresh
               });
             } else {
               apiClient
-                .addCredit(pesos)
+                .addCredit(pesos, undefined, reservedSlot || selectedSlot, coinSlotLockId || undefined)
                 .catch(() => {});
-              if (reservedSlot && coinSlotLockId) {
-                apiClient.releaseCoinSlot(reservedSlot, coinSlotLockId).catch(() => {});
-              }
               setCreditPesos(prev => prev + pesos);
             }
             setShowModal(false);

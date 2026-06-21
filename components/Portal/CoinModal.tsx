@@ -47,6 +47,34 @@ const CoinModal: React.FC<Props> = ({
     return parts.join(' ');
   };
 
+  const calculateTotalMinutes = (pesos: number) => {
+    if (!rates || rates.length === 0) return pesos * 10;
+
+    let remaining = pesos;
+    let minutes = 0;
+    const sortedRates = [...rates].sort((a, b) => b.pesos - a.pesos);
+
+    for (const rate of sortedRates) {
+      if (rate.pesos <= 0) continue;
+      const count = Math.floor(remaining / rate.pesos);
+      if (count > 0) {
+        minutes += count * rate.minutes;
+        remaining -= count * rate.pesos;
+      }
+    }
+
+    if (remaining > 0) {
+      const smallestRate = sortedRates[sortedRates.length - 1];
+      if (smallestRate && smallestRate.pesos > 0) {
+        minutes += Math.floor((remaining / smallestRate.pesos) * smallestRate.minutes);
+      } else {
+        minutes += remaining * 10;
+      }
+    }
+
+    return minutes;
+  };
+
   // Handle Background Audio (Insert Coin Loop)
   useEffect(() => {
     let audio: HTMLAudioElement | null = null;
@@ -85,39 +113,6 @@ const CoinModal: React.FC<Props> = ({
       setIsConnected(false);
     });
 
-    const calculateTotalMinutes = (pesos: number) => {
-      if (!rates || rates.length === 0) return pesos * 10; // Fallback
-
-      let remaining = pesos;
-      let minutes = 0;
-
-      // Sort rates descending by pesos to use the most "efficient" or largest rates first
-      const sortedRates = [...rates].sort((a, b) => b.pesos - a.pesos);
-
-      for (const rate of sortedRates) {
-        if (rate.pesos <= 0) continue;
-        const count = Math.floor(remaining / rate.pesos);
-        if (count > 0) {
-          minutes += count * rate.minutes;
-          remaining -= count * rate.pesos;
-        }
-      }
-
-      // If there's still a remainder (e.g. no 1 peso rate but user inserted 1 peso)
-      // find the smallest rate to calculate a proportional value or use a baseline
-      if (remaining > 0) {
-        const smallestRate = sortedRates[sortedRates.length - 1];
-        if (smallestRate && smallestRate.pesos > 0) {
-          const proportional = Math.floor((remaining / smallestRate.pesos) * smallestRate.minutes);
-          minutes += proportional;
-        } else {
-          minutes += remaining * 10; // Last resort fallback
-        }
-      }
-
-      return minutes;
-    };
-
     const handlePulse = (pesos: number) => {
       console.log(`[COIN] Received Pulse: ₱${pesos}`);
       
@@ -142,9 +137,16 @@ const CoinModal: React.FC<Props> = ({
       }
     };
 
-    socket.on('coin-pulse', (data: { pesos: number }) => {
+    socket.on('coin-pulse', (data: { pesos: number; totalPesos?: number; lockId?: string }) => {
       if (selectedSlot === 'main') {
-        handlePulse(data.pesos);
+        if (data.lockId && coinSlotLockId && data.lockId !== coinSlotLockId) return;
+        if (typeof data.totalPesos === 'number') {
+          setTotalPesos(data.totalPesos);
+          setTotalMinutes(calculateTotalMinutes(data.totalPesos));
+          setTimeLeft(60);
+        } else {
+          handlePulse(data.pesos);
+        }
       }
     });
 
@@ -172,8 +174,26 @@ const CoinModal: React.FC<Props> = ({
 
   useEffect(() => {
     if (!coinSlot || !coinSlotLockId) return;
-    apiClient.heartbeatCoinSlot(coinSlot, coinSlotLockId).catch(() => {});
-  }, [coinSlot, coinSlotLockId]);
+    let cancelled = false;
+
+    const heartbeat = async () => {
+      try {
+        const result = await apiClient.heartbeatCoinSlot(coinSlot, coinSlotLockId);
+        if (cancelled || !result.success) return;
+        if (typeof result.totalPesos === 'number') {
+          setTotalPesos(result.totalPesos);
+          setTotalMinutes(calculateTotalMinutes(result.totalPesos));
+        }
+      } catch (e) {}
+    };
+
+    heartbeat();
+    const heartbeatTimer = setInterval(heartbeat, 2000);
+    return () => {
+      cancelled = true;
+      clearInterval(heartbeatTimer);
+    };
+  }, [coinSlot, coinSlotLockId, rates]);
 
   useEffect(() => {
     if (timeLeft !== 0) return;

@@ -303,6 +303,28 @@ function cleanupExpiredCoinSlotLocks() {
   }
 }
 
+function recordMainCoinPulse(pesos) {
+  cleanupExpiredCoinSlotLocks();
+  const lock = coinSlotLocks.get('main');
+  const safePesos = Math.max(1, Math.floor(Number(pesos) || 1));
+
+  if (!lock || lock.expiresAt <= Date.now()) {
+    console.warn(`[COINSLOT] Ignoring unreserved main pulse: ₱${safePesos}`);
+    return false;
+  }
+
+  lock.totalPesos = Math.max(0, Number(lock.totalPesos) || 0) + safePesos;
+  lock.expiresAt = Date.now() + COINSLOT_LOCK_TTL_MS;
+  console.log(`[COINSLOT] Accepted main pulse for ${lock.ownerMac}: +₱${safePesos}, total=₱${lock.totalPesos}`);
+  io.emit('coin-pulse', {
+    pesos: safePesos,
+    totalPesos: lock.totalPesos,
+    lockId: lock.lockId,
+    ownerMac: lock.ownerMac
+  });
+  return true;
+}
+
 setInterval(cleanupExpiredCoinSlotLocks, 30_000).unref?.();
 
 // Configure Multer for Audio Uploads
@@ -2910,7 +2932,13 @@ app.post('/api/coinslot/reserve', async (req, res) => {
   if (existing && existing.expiresAt > now) {
     if (existing.ownerMac === mac || (token && existing.ownerToken === token)) {
       existing.expiresAt = now + COINSLOT_LOCK_TTL_MS;
-      return res.json({ success: true, slot, lockId: existing.lockId, expiresAt: existing.expiresAt });
+      return res.json({
+        success: true,
+        slot,
+        lockId: existing.lockId,
+        expiresAt: existing.expiresAt,
+        totalPesos: Math.max(0, Number(existing.totalPesos) || 0)
+      });
     }
     return res.status(409).json({
       success: false,
@@ -2923,13 +2951,21 @@ app.post('/api/coinslot/reserve', async (req, res) => {
 
   const lockId = crypto.randomBytes(16).toString('hex');
   const expiresAt = now + COINSLOT_LOCK_TTL_MS;
-  coinSlotLocks.set(slot, { lockId, ownerMac: mac, ownerIp: clientIp, ownerToken: token || null, createdAt: now, expiresAt });
+  coinSlotLocks.set(slot, {
+    lockId,
+    ownerMac: mac,
+    ownerIp: clientIp,
+    ownerToken: token || null,
+    createdAt: now,
+    expiresAt,
+    totalPesos: 0
+  });
   
   if (slot === 'main') {
     try { setRelayState(true); } catch (e) {}
   }
   
-  res.json({ success: true, slot, lockId, expiresAt });
+  res.json({ success: true, slot, lockId, expiresAt, totalPesos: 0 });
 });
 
 app.post('/api/coinslot/heartbeat', async (req, res) => {
@@ -2954,7 +2990,12 @@ app.post('/api/coinslot/heartbeat', async (req, res) => {
   }
 
   existing.expiresAt = Date.now() + COINSLOT_LOCK_TTL_MS;
-  res.json({ success: true, slot, expiresAt: existing.expiresAt });
+  res.json({
+    success: true,
+    slot,
+    expiresAt: existing.expiresAt,
+    totalPesos: Math.max(0, Number(existing.totalPesos) || 0)
+  });
 });
 
 app.post('/api/coinslot/release', async (req, res) => {
@@ -2987,9 +3028,21 @@ app.post('/api/credits/add', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Could not identify your device MAC.' });
     }
 
-    const { pesos, minutes } = req.body || {};
-    const safePesos = typeof pesos === 'number' && pesos > 0 ? Math.floor(pesos) : 0;
+    const { pesos, minutes, slot: requestedSlot, lockId } = req.body || {};
+    let safePesos = typeof pesos === 'number' && pesos > 0 ? Math.floor(pesos) : 0;
     let safeMinutes = typeof minutes === 'number' && minutes > 0 ? Math.floor(minutes) : 0;
+
+    const slot = normalizeCoinSlot(requestedSlot);
+    let slotLock = null;
+    if (slot === 'main' && lockId) {
+      cleanupExpiredCoinSlotLocks();
+      slotLock = coinSlotLocks.get(slot);
+      if (!slotLock || slotLock.lockId !== lockId || slotLock.ownerMac !== mac) {
+        return res.status(409).json({ success: false, error: 'Coinslot reservation expired.' });
+      }
+      safePesos = Math.max(0, Math.floor(Number(slotLock.totalPesos) || 0));
+      safeMinutes = 0;
+    }
 
     if (!safePesos) {
       return res.status(400).json({ success: false, error: 'Invalid credit values.' });
@@ -3022,6 +3075,11 @@ app.post('/api/credits/add', async (req, res) => {
     try {
       await applyRewardsForPurchase(mac, clientIp, safePesos);
     } catch (e) {}
+
+    if (slotLock && slot === 'main') {
+      try { setRelayState(false); } catch (e) {}
+      coinSlotLocks.delete(slot);
+    }
 
     res.json({ success: true });
   } catch (err) {
@@ -3451,7 +3509,8 @@ app.post('/api/admin/coinsout', requireAdmin, async (req, res) => {
 });
 
 app.post('/api/sessions/start', async (req, res) => {
-  const { minutes, pesos, slot: requestedSlot, lockId } = req.body;
+  let { minutes, pesos } = req.body;
+  const { slot: requestedSlot, lockId } = req.body;
   let clientIp = req.ip ? req.ip.replace('::ffff:', '') : '';
   if (clientIp === '::1') clientIp = '127.0.0.1';
   let mac = await getMacFromIp(clientIp);
@@ -3473,6 +3532,18 @@ app.post('/api/sessions/start', async (req, res) => {
       return res.status(409).json({ error: 'JUST WAIT SOMEONE IS PAYING.' });
     }
     return res.status(409).json({ error: 'Coinslot reservation expired. Please press Insert Coin again.' });
+  }
+
+  if (slot === 'main') {
+    const recordedPesos = Math.max(0, Math.floor(Number(slotLock.totalPesos) || 0));
+    if (recordedPesos <= 0) {
+      return res.status(400).json({ error: 'No coin pulse was recorded for this reservation.' });
+    }
+    pesos = recordedPesos;
+    minutes = await calculateMinutesFromPesos(recordedPesos);
+    if (!minutes || minutes <= 0) {
+      return res.status(400).json({ error: `No pricing rate can convert ₱${recordedPesos} to time.` });
+    }
   }
 
   try {
@@ -8381,7 +8452,7 @@ async function bootupRestore(isRestricted = false) {
   
   const coinCallback = (pesos) => {
     console.log(`[MAIN GPIO] Pulse Detected | Amount: ₱${pesos}`);
-    io.emit('coin-pulse', { pesos });
+    recordMainCoinPulse(pesos);
     // Also emit multi-slot event for tracking
     io.emit('multi-coin-pulse', { denomination: pesos, slot_id: null });
   };
